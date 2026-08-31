@@ -164,3 +164,10 @@ a { color: inherit; }
   .card { animation: none; }
   *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; }
 }
+
+/* traced ESP figure on its card */
+.device .case   { fill:none; stroke:var(--white);  stroke-width:5;   stroke-linecap:round; stroke-linejoin:round; }
+.device .chip   { fill:none; stroke:var(--white);  stroke-width:4;   stroke-linecap:round; stroke-linejoin:round; }
+.device .edge   { fill:none; stroke:var(--white);  stroke-width:3.4; stroke-linecap:round; stroke-linejoin:round; }
+.device .detail { fill:none; stroke:var(--white);  stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+.device .fine   { fill:none; stroke:var(--gray-1); stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
