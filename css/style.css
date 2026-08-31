@@ -126,6 +126,8 @@ a { color: inherit; }
 .device .drill { fill: var(--surface-2); }
 .device .ghost { fill: none; stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 5 4; }
 .device .led { fill: var(--accent); stroke: none; }
+.grid > .card:nth-child(1) .device .led { fill: #30D158; }  /* Ducky: green */
+.grid > .card:nth-child(2) .device .led { fill: #0A84FF; }  /* ESP: blue */
 .device .mod {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 20px; font-weight: 600; letter-spacing: 0.04em;
