@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flashers</title>
+<meta name="description" content="Browser flashers for QWavey hardware. Flash firmware straight from the browser over USB — no toolchain, no command line.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="eyebrow">QWavey<span class="dot">&middot;</span>hardware</p>
+    <h1>Flashers</h1>
+    <p>Flash open firmware onto the boards straight from your browser, over USB.
+      No toolchain, no command line. Pick a device.</p>
+  </header>
+
+  <main class="grid">
+
+    <a class="card" href="https://qwavey.github.io/WebFlasher/">
+      <div class="art"><svg class="device" viewBox="-52 0 430 570" role="img">
+
+          <!-- USB-C plug. Built the same way as the USB-A end below: shell,
+               rolled tip edge, folded side seams. What tells them apart is
+               what is true of the real parts: this one is much narrower and has
+               latch dimples where USB-A has two stamped windows. -->
+          <g class="shell">
+            <rect x="117" y="14" width="66" height="66" rx="3.5"/>
+            <path d="M117 24 H183"/>
+            <path d="M126 24 V80 M174 24 V80"/>
+            <rect x="132" y="46" width="14" height="6" rx="3"/>
+            <rect x="154" y="46" width="14" height="6" rx="3"/>
+          </g>
+          <g class="part">
+            <rect x="102" y="80" width="96" height="16" rx="2"/>
+            <path d="M112 80 V96 M188 80 V96"/>
+            <path d="M124 84 V92 M136 84 V92 M148 84 V92 M160 84 V92 M172 84 V92"/>
+          </g>
+
+          <!-- board -->
+          <g class="board">
+            <rect x="74" y="96" width="152" height="356" rx="4"/>
+          </g>
+
+          <!-- microSD push-push socket: stamped-steel cage, the inserted card
+               with its cut corner and label, and the row of gold contacts on
+               the exposed lower lip. Matches the real socket close-up. -->
+          <g class="part">
+            <rect x="80" y="110" width="140" height="128" rx="2"/>
+            <path d="M80 122 H220 M80 226 H220"/>
+            <path d="M92 110 V98 H128 V110 M170 110 V98 H206 V110"/>
+            <circle cx="150" cy="116" r="2.4" class="fillpin"/>
+          </g>
+          <!-- inserted card, cut corner top-right -->
+          <g class="card2">
+            <path d="M96 128 H188 L204 144 V208 H96 Z"/>
+            <path d="M96 140 H204"/>
+            <text x="150" y="180" class="sd">12</text>
+          </g>
+          <!-- exposed contact fingers on the lower lip -->
+          <g class="pins">
+            <path d="M104 232 V244 M114 232 V244 M124 232 V244 M134 232 V244 M144 232 V244 M154 232 V244 M164 232 V244 M174 232 V244"/>
+          </g>
+          <g class="passive">
+            <rect x="100" y="222" width="11" height="9" rx="2"/>
+            <rect x="114" y="222" width="11" height="9" rx="2"/>
+            <rect x="128" y="222" width="11" height="9" rx="2"/>
+            <rect x="142" y="222" width="11" height="9" rx="2"/>
+            <rect x="156" y="222" width="11" height="9" rx="2"/>
+            <rect x="170" y="222" width="11" height="9" rx="2"/>
+            <rect x="184" y="222" width="11" height="9" rx="2"/>
+            <rect x="198" y="222" width="11" height="9" rx="2"/>
+            <rect x="74" y="132" width="10" height="18" rx="1"/>
+            <rect x="216" y="132" width="10" height="18" rx="1"/>
+            <rect x="74" y="214" width="10" height="18" rx="1"/>
+            <rect x="216" y="214" width="10" height="18" rx="1"/>
+          </g>
+
+          <!-- X1 crystal, left edge -->
+          <g class="part">
+            <rect x="84" y="284" width="46" height="46" rx="3"/>
+            <rect x="92" y="292" width="30" height="30" rx="2" class="card2"/>
+          </g>
+          <g class="passive">
+            <rect x="80" y="288" width="8" height="12" rx="1"/>
+            <rect x="126" y="288" width="8" height="12" rx="1"/>
+            <rect x="80" y="314" width="8" height="12" rx="1"/>
+            <rect x="126" y="314" width="8" height="12" rx="1"/>
+          </g>
+
+          <!-- SW1 boot button, right edge -->
+          <g class="part boot" id="figBoot">
+            <rect x="146" y="288" width="50" height="50" rx="3"/>
+            <circle cx="171" cy="313" r="14"/>
+            <path d="M151 288 v-6 M191 288 v-6 M151 338 v6 M191 338 v6"/>
+          </g>
+
+          <!-- passives between the parts -->
+          <g class="passive">
+            <rect x="138" y="262" width="9" height="14" rx="1"/>
+            <rect x="160" y="262" width="9" height="14" rx="1"/>
+            <rect x="182" y="262" width="9" height="14" rx="1"/>
+            <rect x="138" y="352" width="14" height="9" rx="1"/>
+            <rect x="108" y="352" width="14" height="9" rx="1"/>
+            <rect x="176" y="350" width="9" height="14" rx="1"/>
+            <rect x="176" y="374" width="9" height="14" rx="1"/>
+            <rect x="86" y="266" width="9" height="14" rx="1"/>
+          </g>
+
+          <!-- test points -->
+          <g class="ink">
+            <circle cx="88" cy="392" r="3"/>
+            <circle cx="88" cy="408" r="3"/>
+          </g>
+
+          <!-- eight-pad header, right edge -->
+          <g class="ink">
+            <circle cx="209" cy="300" r="4"/><circle cx="209" cy="316" r="4"/>
+            <circle cx="209" cy="332" r="4"/><circle cx="209" cy="348" r="4"/>
+            <circle cx="209" cy="364" r="4"/><circle cx="209" cy="380" r="4"/>
+            <circle cx="209" cy="396" r="4"/><circle cx="209" cy="412" r="4"/>
+          </g>
+
+          <!-- microcontroller, reverse side: hidden-line convention -->
+          <rect class="ghost" x="104" y="376" width="62" height="62" rx="2"/>
+
+          <!-- the two large vias by the USB-A end -->
+          <g class="ink">
+            <circle cx="92" cy="430" r="6.5"/>
+            <circle cx="92" cy="430" r="2.6" class="drill"/>
+            <circle cx="208" cy="430" r="6.5"/>
+            <circle cx="208" cy="430" r="2.6" class="drill"/>
+          </g>
+
+          <!-- USB-A plug -->
+          <g class="part">
+            <rect x="84" y="440" width="20" height="15" rx="2"/>
+            <rect x="196" y="440" width="20" height="15" rx="2"/>
+          </g>
+          <g class="shell">
+            <rect x="99" y="452" width="102" height="92" rx="2"/>
+            <path d="M99 536 H201"/>
+            <path d="M109 458 V536 M191 458 V536"/>
+            <path d="M99 494 h12 v18 h-12"/>
+            <path d="M201 494 h-12 v18 h12"/>
+            <rect x="120" y="476" width="24" height="26" rx="3"/>
+            <rect x="156" y="476" width="24" height="26" rx="3"/>
+          </g>
+        </svg></div>
+      <div class="body">
+        <p class="kicker">WebUSB &middot; DFU</p>
+        <h2>Rubberless-Ducky</h2>
+        <p class="desc">Open AT32UC3B1 firmware for the Hak5 USB Rubber Ducky,
+          for reviving a bricked board.</p>
+        <div class="meta"><span>MCU <b>AT32UC3B1</b></span><span>Flash <b>256 KB</b></span><span>ID <b>03EB:2FF6</b></span></div>
+        <span class="open">Open flasher <span class="arrow">&#8594;</span></span>
+      </div>
+    </a>
+
+    <a class="card" href="https://qwavey.github.io/ESP-S3-Key-BadUSB/">
+      <div class="art"><svg class="device" viewBox="-52 0 430 570" role="img">
+
+          <!-- clear acrylic case -->
+          <g class="ghost">
+            <rect x="64" y="70" width="172" height="392" rx="12"/>
+          </g>
+
+          <!-- board -->
+          <g class="board">
+            <rect x="80" y="92" width="140" height="360" rx="3"/>
+          </g>
+
+          <!-- ESP32-S3-MINI-1: PCB antenna, then the RF shield can -->
+          <g class="part">
+            <path d="M104 108 H196 M104 108 V150 H196 V108 M118 108 V150 M132 108 V150 M146 108 V150 M160 108 V150 M174 108 V150"/>
+          </g>
+          <g class="part">
+            <rect x="92" y="158" width="116" height="176" rx="3"/>
+            <path d="M100 166 H200 M100 178 H200" class="card2"/>
+            <text x="150" y="250" class="mod">ESP32&#8209;S3</text>
+            <text x="150" y="272" class="mod sub2">MINI&#8209;1</text>
+          </g>
+
+          <!-- passives + regulator between module and USB end -->
+          <g class="passive">
+            <rect x="96" y="344" width="12" height="9" rx="2"/>
+            <rect x="114" y="344" width="12" height="9" rx="2"/>
+            <rect x="160" y="344" width="20" height="14" rx="2"/>
+            <rect x="188" y="344" width="12" height="9" rx="2"/>
+            <rect x="96" y="366" width="9" height="14" rx="2"/>
+            <rect x="192" y="366" width="9" height="14" rx="2"/>
+            <rect x="176" y="386" width="12" height="9" rx="2"/>
+          </g>
+
+          <!-- BOOT tactile button near the USB-A end -->
+          <g class="part boot" id="figBoot">
+            <rect x="112" y="372" width="44" height="44" rx="3"/>
+            <circle cx="134" cy="394" r="12"/>
+            <path d="M116 372 v-5 M152 372 v-5 M116 416 v5 M152 416 v5"/>
+          </g>
+
+          <!-- status LED -->
+          <g class="part"><rect x="164" y="392" width="22" height="13" rx="1"/></g>
+          <circle class="led" cx="175" cy="398" r="3.4"/>
+
+          <!-- test pads / vias by the USB end -->
+          <g class="ink">
+            <circle cx="92" cy="432" r="6"/><circle cx="92" cy="432" r="2.4" class="drill"/>
+            <circle cx="208" cy="432" r="6"/><circle cx="208" cy="432" r="2.4" class="drill"/>
+          </g>
+
+          <!-- USB-A plug -->
+          <g class="part">
+            <rect x="84" y="440" width="20" height="14" rx="2"/>
+            <rect x="196" y="440" width="20" height="14" rx="2"/>
+          </g>
+          <g class="shell">
+            <rect x="99" y="452" width="102" height="92" rx="2"/>
+            <path d="M99 536 H201"/>
+            <path d="M109 458 V536 M191 458 V536"/>
+            <rect x="120" y="476" width="24" height="26" rx="3"/>
+            <rect x="156" y="476" width="24" height="26" rx="3"/>
+          </g>
+        </svg></div>
+      <div class="body">
+        <p class="kicker">WebSerial &middot; esptool</p>
+        <h2>ESP32-S3 Key</h2>
+        <p class="desc">The ESP32-S3 Key BadUSB firmware, flashed as a full image
+          set over the chip&rsquo;s own USB.</p>
+        <div class="meta"><span>MCU <b>ESP32-S3</b></span><span>Flash <b>8 MB</b></span><span>VID <b>303A</b></span></div>
+        <span class="open">Open flasher <span class="arrow">&#8594;</span></span>
+      </div>
+    </a>
+
+  </main>
+
+  <footer class="foot">
+    <a href="https://github.com/QWavey/WebFlasher">Rubberless-Ducky repo</a>
+    <a href="https://github.com/QWavey/ESP-S3-Key-BadUSB">ESP32-S3 Key repo</a>
+    <a href="https://github.com/QWavey">GitHub</a>
+  </footer>
+
+</div>
+
+</body>
+</html>
