@@ -22,7 +22,7 @@
     {
       "path": "firmware.bin",
       "offset": 65536,
-      "size": 1678880
+      "size": 2136496
     }
   ]
 }
