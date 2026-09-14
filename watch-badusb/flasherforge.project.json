@@ -1,0 +1,230 @@
+{
+  "schema_version": 1,
+  "preset_name": "ESP-Watch-BadUSB",
+  "device_name": "ESP-Watch-BadUSB",
+  "tagline": "BadUSB firmware for the Waveshare ESP32-S3 Touch-AMOLED 2.06\" watch — flashed straight from the browser.",
+  "description": "This writes the ESP-Watch-BadUSB firmware onto the watch over USB with WebSerial. It replaces whatever firmware is on the board now — including the stock Xiaozhi demo.",
+  "brand_word_1": "ESP-WATCH",
+  "brand_word_2": "BADUSB",
+  "version_label": "WebFlasher",
+  "author": "QWavey",
+  "output_dir": "C:\\Users\\Flo\\Downloads\\NewApps\\watch-badusb-project\\flasher-out\\watch-badusb",
+  "license": "MIT",
+  "open_source": true,
+  "danger_note": "Flashing overwrites the app partition. SD-card files are not touched, but the firmware is. Only run this on your own hardware.",
+  "backlink_url": "https://qwavey.github.io/flashers/",
+  "backlink_text": "All flashers",
+  "repo_url": "https://github.com/QWavey/ESP-S3-Key-BadUSB",
+  "footer_text": "Runs entirely in your browser over your own USB connection. Nothing is uploaded.",
+  "favicon_emoji": "",
+  "year": 2026,
+  "figure": {
+    "image_path": "C:\\Users\\Flo\\Downloads\\NewApps\\watch-badusb-project\\flasher-out\\watch-photo.jpg",
+    "image_url": "",
+    "curve": true,
+    "rotate": 0,
+    "min_len_frac": 0.02,
+    "adapt_c": 8,
+    "simplify_eps": 1.6,
+    "upscale": 1400,
+    "work_max": 1500,
+    "caption": "Fig. 1 — Waveshare ESP32-S3 Touch-AMOLED 2.06\"",
+    "labels": [
+      {
+        "x": 0.5,
+        "y": 0.16,
+        "text": "AMOLED",
+        "box": null
+      },
+      {
+        "x": 0.15,
+        "y": 0.5,
+        "text": "STRAP",
+        "box": null
+      },
+      {
+        "x": 0.85,
+        "y": 0.5,
+        "text": "STRAP",
+        "box": null
+      },
+      {
+        "x": 0.5,
+        "y": 0.88,
+        "text": "BODY",
+        "box": null
+      },
+      {
+        "x": 0.72,
+        "y": 0.85,
+        "text": "USB-C",
+        "box": null
+      }
+    ],
+    "spec_rows": [
+      {
+        "dt": "MCU",
+        "dd": "ESP32-S3"
+      },
+      {
+        "dt": "Screen",
+        "dd": "410x502 AMOLED"
+      },
+      {
+        "dt": "Flash",
+        "dd": "32 MB"
+      },
+      {
+        "dt": "PSRAM",
+        "dd": "OPI PSRAM"
+      },
+      {
+        "dt": "Link",
+        "dd": "WebSerial"
+      }
+    ],
+    "dim_length": "",
+    "dim_width": "",
+    "dim_unit": "mm",
+    "figure_mode": "trace",
+    "figure_svg_path": ""
+  },
+  "steps": [
+    {
+      "title": "Read this first.",
+      "body": "This writes the ESP-Watch-BadUSB firmware onto the watch. It replaces the firmware currently on it — the stock Xiaozhi demo will be gone until you reflash it.",
+      "kicker": "Step 01",
+      "rail_label": "Brief",
+      "is_flash_step": false,
+      "requires_physical_action": false,
+      "confirm_label": ""
+    },
+    {
+      "title": "Download mode.",
+      "body": "The ESP32-S3 flashes over its own USB. If the watch does not drop into download mode on its own when the flasher connects, hold BOOT (side button) while plugging the USB-C cable in, then let go.\n\nChrome or Edge only — Firefox and Safari have no WebSerial.",
+      "kicker": "Step 02",
+      "rail_label": "Boot",
+      "is_flash_step": false,
+      "requires_physical_action": true,
+      "confirm_label": "Ready"
+    },
+    {
+      "title": "Connect.",
+      "body": "Pick the device in the browser prompt. It appears under vendor 303A (Espressif) as a USB serial port.",
+      "kicker": "Step 03",
+      "rail_label": "Connect",
+      "is_flash_step": false,
+      "requires_physical_action": false,
+      "confirm_label": ""
+    },
+    {
+      "title": "Flash.",
+      "body": "Erase, then write each image at its offset, then reboot. Do not unplug the watch until the log says it is done.",
+      "kicker": "Step 04",
+      "rail_label": "Flash",
+      "is_flash_step": true,
+      "requires_physical_action": false,
+      "confirm_label": ""
+    }
+  ],
+  "hold_to_flash": true,
+  "firmware": {
+    "transport": "esp32",
+    "chip": "ESP32-S3",
+    "flash_baud": 921600,
+    "rom_baud": 115200,
+    "flash_mode": "keep",
+    "flash_freq": "keep",
+    "flash_size": "keep",
+    "erase_all": false,
+    "compress": true,
+    "app_offset": 65536,
+    "images": [
+      {
+        "path": "C:\\Users\\Flo\\Downloads\\NewApps\\watch-badusb-project\\flasher-out\\firmware\\bootloader.bin",
+        "offset": 0,
+        "label": "bootloader"
+      },
+      {
+        "path": "C:\\Users\\Flo\\Downloads\\NewApps\\watch-badusb-project\\flasher-out\\firmware\\partitions.bin",
+        "offset": 32768,
+        "label": "partitions"
+      },
+      {
+        "path": "C:\\Users\\Flo\\Downloads\\NewApps\\watch-badusb-project\\flasher-out\\firmware\\boot_app0.bin",
+        "offset": 57344,
+        "label": "boot_app0"
+      },
+      {
+        "path": "C:\\Users\\Flo\\Downloads\\NewApps\\watch-badusb-project\\flasher-out\\firmware\\firmware.bin",
+        "offset": 65536,
+        "label": "app"
+      }
+    ],
+    "dfu_hex_path": "",
+    "dfu_vid": 1003,
+    "dfu_pids": [
+      12278,
+      12279,
+      12280,
+      12273,
+      12282,
+      12283
+    ],
+    "flash_base": 2147483648,
+    "flash_window": 262144,
+    "boot_reserve": 8192,
+    "page_size": 512,
+    "flash_many_default": false,
+    "encrypted": false,
+    "downloads": [
+      {
+        "path": "firmware/firmware.bin",
+        "description": "Application image (offset 0x10000)."
+      },
+      {
+        "path": "firmware/bootloader.bin",
+        "description": "Second-stage bootloader (offset 0x0)."
+      },
+      {
+        "path": "firmware/partitions.bin",
+        "description": "Partition table (offset 0x8000)."
+      },
+      {
+        "path": "firmware/manifest.json",
+        "description": "Offsets and versions the flasher reads."
+      }
+    ]
+  },
+  "design": {
+    "true_black": true,
+    "accent": "#FF6A13",
+    "ok": "#30D158",
+    "err": "#FF453A",
+    "led": "#0A84FF",
+    "white": "#F5F5F7",
+    "gray_1": "#A1A1A6",
+    "gray_2": "#8A8A8F",
+    "heading_font": "Archivo",
+    "mono_font": "IBM Plex Mono",
+    "cue_boot": true,
+    "cue_data": true,
+    "cue_led": true,
+    "cue_shimmer": true,
+    "cue_check": true
+  },
+  "features": {
+    "show_log": true,
+    "show_files": true,
+    "show_backlink": true,
+    "show_specs": true,
+    "show_footer_legal": true,
+    "show_github": true,
+    "show_choose_file": true,
+    "show_pagemap": true,
+    "show_reduced_motion": true,
+    "show_figure_caption": true,
+    "show_status_dot": true,
+    "animate_draw_on": true
+  }
+}
