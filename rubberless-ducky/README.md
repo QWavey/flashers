@@ -1,8 +1,13 @@
-# WebFlasher
+# Rubberless-Ducky WebFlasher
 
-WebUSB flasher for [Rubberless-Ducky](https://github.com/QWavey/Rubberless-Ducky) firmware, deployed to GitHub Pages.
+WebUSB / AVR32 DFU flasher for the
+[Rubberless-Ducky](https://github.com/QWavey/Rubberless-Ducky) open
+firmware — targets the Hak5 USB Rubber Ducky Mk II (2022 board).
 
-Live: **https://qwavey.github.io/WebFlasher/**
+**Live:** https://qwavey.github.io/flashers/rubberless-ducky/
+**Firmware source:** https://github.com/QWavey/Rubberless-Ducky
+**Hub:** https://qwavey.github.io/flashers/ *(also in this repo, one level up)*
+**Legacy URL:** `qwavey.github.io/WebFlasher/` still resolves — same content — kept alive until that source repo is archived.
 
 ## Layout
 
