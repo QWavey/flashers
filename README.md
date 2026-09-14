@@ -32,7 +32,7 @@ the *firmware sources* live in their own repos:
 
 | Device | Flasher (this repo) | Firmware source |
 |---|---|---|
-| ESP32-S3 Touch-AMOLED watch | `watch-badusb/` | [QWavey/ESP-S3-Key-BadUSB — watch port](https://github.com/QWavey/ESP-S3-Key-BadUSB) *(same firmware base, watch-specific port lives in the [`watch-badusb-project/ESP-Watch-BadUSB`](https://github.com/QWavey/ESP-S3-Key-BadUSB) directory)* |
+| ESP32-S3 Touch-AMOLED watch | `watch-badusb/` | [QWavey/ESP-Watch-BadUSB](https://github.com/QWavey/ESP-Watch-BadUSB) *(port of the ESP-S3-Key firmware to the watch hardware)* |
 | ESP32-S3 Key (USB-A dongle) | `esp-s3-key/`     | [QWavey/ESP-S3-Key-BadUSB](https://github.com/QWavey/ESP-S3-Key-BadUSB) |
 | Hak5 USB Rubber Ducky Mk II | `rubberless-ducky/` | [QWavey/Rubberless-Ducky](https://github.com/QWavey/Rubberless-Ducky) |
 

@@ -3,7 +3,7 @@
 BadUSB firmware for the Waveshare ESP32-S3 Touch-AMOLED 2.06" watch — flashed straight from the browser.
 
 **Live:** https://qwavey.github.io/flashers/watch-badusb/
-**Firmware source:** https://github.com/QWavey/ESP-S3-Key-BadUSB *(watch-specific port lives in the `watch-badusb-project/ESP-Watch-BadUSB/` folder there)*
+**Firmware source:** https://github.com/QWavey/ESP-Watch-BadUSB
 **Hub:** https://qwavey.github.io/flashers/ *(also in this repo, one level up)*
 
 This writes the ESP-Watch-BadUSB firmware onto the watch over USB with WebSerial. It replaces whatever firmware is on the board now — including the stock Xiaozhi demo.
