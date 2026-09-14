@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rubberless-Ducky WebFlasher</title>
+<meta name="description" content="Open AT32UC3B1 firmware for the Hak5 USB Rubber Ducky, flashed straight from the browser over WebUSB. No toolchain, no command line.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+<noscript>
+  <p class="noscript">This flasher talks to the device from the page itself, so
+  it needs JavaScript enabled. With it off, nothing below will respond. The
+  command line route in the
+  <a href="https://github.com/QWavey/Rubberless-Ducky">firmware repo</a> works
+  without it.</p>
+</noscript>
+
+<div class="stage">
+
+<article class="box" id="box">
+
+  <!-- ─────────── top strip ─────────── -->
+  <header class="box-top">
+    <div class="box-lead">
+      <a class="backlink" href="https://qwavey.github.io/flashers/"><span class="bl-arrow" aria-hidden="true">&#8592;</span> All flashers</a>
+      <p class="brandline">RUBBERLESS<span class="sep">&middot;</span>DUCKY
+        <span class="ver">WebFlasher v0-alpha</span></p>
+    </div>
+    <p class="status" id="status" data-state="idle">
+      <span class="dot" aria-hidden="true"></span><span id="statusText">No device</span>
+    </p>
+  </header>
+
+  <div class="box-body">
+
+    <!-- ─────────── left slab ─────────── -->
+    <aside class="slab">
+      <figure class="fig">
+        <svg class="device" viewBox="-52 0 430 570" role="img" aria-labelledby="figtitle">
+          <title id="figtitle">NEW DUC v2.0 board, component side. USB-C at one end, USB-A at the other, with a microSD socket, the X1 crystal, the SW1 boot button and an eight-pad header between them. The microcontroller is on the reverse.</title>
+
+          <!-- USB-C plug. Built the same way as the USB-A end below: shell,
+               rolled tip edge, folded side seams. What tells them apart is
+               what is true of the real parts: this one is much narrower and has
+               latch dimples where USB-A has two stamped windows. -->
+          <g class="shell">
+            <rect x="117" y="28" width="66" height="52" rx="3.5"/>
+            <path d="M117 38 H183"/>
+            <path d="M126 38 V80 M174 38 V80"/>
+            <rect x="132" y="52" width="14" height="6" rx="3"/>
+            <rect x="154" y="52" width="14" height="6" rx="3"/>
+          </g>
+          <g class="part">
+            <rect x="102" y="80" width="96" height="16" rx="2"/>
+            <path d="M112 80 V96 M188 80 V96"/>
+            <path d="M124 84 V92 M136 84 V92 M148 84 V92 M160 84 V92 M172 84 V92"/>
+          </g>
+
+          <!-- board -->
+          <g class="board">
+            <rect x="74" y="96" width="152" height="356" rx="4"/>
+          </g>
+
+          <!-- microSD push-push socket: stamped-steel cage, the inserted card
+               with its cut corner and label, and the row of gold contacts on
+               the exposed lower lip. Matches the real socket close-up. -->
+          <g class="part">
+            <rect x="80" y="110" width="140" height="128" rx="2"/>
+            <path d="M80 122 H220 M80 226 H220"/>
+            <path d="M92 110 V98 H128 V110 M170 110 V98 H206 V110"/>
+            <circle cx="150" cy="116" r="2.4" class="fillpin"/>
+          </g>
+          <!-- inserted card, cut corner top-right -->
+          <g class="card">
+            <path d="M96 128 H188 L204 144 V208 H96 Z"/>
+            <path d="M96 140 H204"/>
+            <text x="150" y="180" class="sd">12</text>
+          </g>
+          <!-- exposed contact fingers on the lower lip -->
+          <g class="pins">
+            <path d="M104 232 V244 M114 232 V244 M124 232 V244 M134 232 V244 M144 232 V244 M154 232 V244 M164 232 V244 M174 232 V244"/>
+          </g>
+          <g class="passive">
+            <rect x="100" y="222" width="11" height="9" rx="2"/>
+            <rect x="114" y="222" width="11" height="9" rx="2"/>
+            <rect x="128" y="222" width="11" height="9" rx="2"/>
+            <rect x="142" y="222" width="11" height="9" rx="2"/>
+            <rect x="156" y="222" width="11" height="9" rx="2"/>
+            <rect x="170" y="222" width="11" height="9" rx="2"/>
+            <rect x="184" y="222" width="11" height="9" rx="2"/>
+            <rect x="198" y="222" width="11" height="9" rx="2"/>
+            <rect x="74" y="132" width="10" height="18" rx="1"/>
+            <rect x="216" y="132" width="10" height="18" rx="1"/>
+            <rect x="74" y="214" width="10" height="18" rx="1"/>
+            <rect x="216" y="214" width="10" height="18" rx="1"/>
+          </g>
+
+          <!-- status LED -->
+          <g class="part"><rect x="190" y="244" width="16" height="12" rx="1"/></g>
+          <circle class="led" cx="198" cy="250" r="3.6"/>
+
+          <!-- X1 crystal, left edge -->
+          <g class="part">
+            <rect x="84" y="284" width="46" height="46" rx="3"/>
+            <rect x="92" y="292" width="30" height="30" rx="2" class="card"/>
+          </g>
+          <g class="passive">
+            <rect x="80" y="288" width="8" height="12" rx="1"/>
+            <rect x="126" y="288" width="8" height="12" rx="1"/>
+            <rect x="80" y="314" width="8" height="12" rx="1"/>
+            <rect x="126" y="314" width="8" height="12" rx="1"/>
+          </g>
+
+          <!-- SW1 boot button, right edge -->
+          <g class="part boot" id="figBoot">
+            <rect x="146" y="288" width="50" height="50" rx="3"/>
+            <circle cx="171" cy="313" r="14"/>
+            <path d="M151 288 v-6 M191 288 v-6 M151 338 v6 M191 338 v6"/>
+          </g>
+
+          <!-- passives between the parts -->
+          <g class="passive">
+            <rect x="138" y="262" width="9" height="14" rx="1"/>
+            <rect x="160" y="262" width="9" height="14" rx="1"/>
+            <rect x="182" y="262" width="9" height="14" rx="1"/>
+            <rect x="138" y="352" width="14" height="9" rx="1"/>
+            <rect x="108" y="352" width="14" height="9" rx="1"/>
+            <rect x="176" y="350" width="9" height="14" rx="1"/>
+            <rect x="176" y="374" width="9" height="14" rx="1"/>
+            <rect x="86" y="266" width="9" height="14" rx="1"/>
+          </g>
+
+          <!-- test points -->
+          <g class="ink">
+            <circle cx="88" cy="392" r="3"/>
+            <circle cx="88" cy="408" r="3"/>
+          </g>
+
+          <!-- eight-pad header, right edge -->
+          <g class="ink">
+            <circle cx="209" cy="300" r="4"/><circle cx="209" cy="316" r="4"/>
+            <circle cx="209" cy="332" r="4"/><circle cx="209" cy="348" r="4"/>
+            <circle cx="209" cy="364" r="4"/><circle cx="209" cy="380" r="4"/>
+            <circle cx="209" cy="396" r="4"/><circle cx="209" cy="412" r="4"/>
+          </g>
+
+          <!-- microcontroller, reverse side: hidden-line convention -->
+          <rect class="ghost" x="104" y="376" width="62" height="62" rx="2"/>
+
+          <!-- the two large vias by the USB-A end -->
+          <g class="ink">
+            <circle cx="92" cy="430" r="6.5"/>
+            <circle cx="92" cy="430" r="2.6" class="drill"/>
+            <circle cx="208" cy="430" r="6.5"/>
+            <circle cx="208" cy="430" r="2.6" class="drill"/>
+          </g>
+
+          <!-- USB-A plug -->
+          <g class="part">
+            <rect x="84" y="440" width="20" height="15" rx="2"/>
+            <rect x="196" y="440" width="20" height="15" rx="2"/>
+          </g>
+          <g class="shell">
+            <rect x="99" y="452" width="102" height="92" rx="2"/>
+            <path d="M99 536 H201"/>
+            <path d="M109 458 V536 M191 458 V536"/>
+            <path d="M99 494 h12 v18 h-12"/>
+            <path d="M201 494 h-12 v18 h12"/>
+            <rect x="120" y="476" width="24" height="26" rx="3"/>
+            <rect x="156" y="476" width="24" height="26" rx="3"/>
+          </g>
+
+          <!-- state FX layer: press hint, data flow, connected badge, port -->
+          <g class="fx">
+            <g class="fx-data">
+              <path class="fx-trace l" d="M132 470 V438"/>
+              <path class="fx-trace r" d="M168 470 V450 Q168 442 160 440 V438"/>
+              <circle class="fx-pk l"    r="3.2"/><circle class="fx-pk l d2" r="3.2"/><circle class="fx-pk l d3" r="3.2"/>
+              <circle class="fx-pk r"    r="3.2"/><circle class="fx-pk r d2" r="3.2"/><circle class="fx-pk r d3" r="3.2"/>
+            </g>
+            <rect class="fx-sink" x="104" y="376" width="62" height="62" rx="2"/>
+            <g class="fx-press">
+              <circle class="fx-ring" cx="171" cy="313" r="20"/>
+              <path class="fx-arrow" d="M171 276 v20 M163 288 l8 8 l8 -8"/>
+            </g>
+            <g class="fx-check">
+              <circle cx="330" cy="70" r="20"/>
+              <path class="fx-tick" d="M320 70 l7 8 l14 -16"/>
+            </g>
+            <g class="fx-port">
+              <path d="M96 548 H110 M190 548 H204"/>
+              <rect class="fx-shroud" x="95" y="540" width="110" height="24" rx="2"/>
+            </g>
+          </g>
+
+          <!-- callouts -->
+          <g class="callout">
+            <path d="M187 57 H262"/><circle cx="187" cy="57" r="3.4"/>
+            <text x="270" y="64">USB-C</text>
+
+            <path d="M220 178 H262"/><circle cx="220" cy="178" r="3.4"/>
+            <text x="270" y="170">microSD</text>
+            <text x="270" y="198" class="sub">payload</text>
+
+            <path d="M204 250 H262"/><circle cx="204" cy="250" r="3.4" class="ledpin"/>
+            <text x="270" y="254">LED</text>
+
+            <path d="M196 313 H262"/><circle cx="196" cy="313" r="3.4"/>
+            <text x="270" y="305">SW1</text>
+            <text x="270" y="333" class="sub">boot</text>
+
+            <path d="M213 396 H262"/><circle cx="213" cy="396" r="3.4"/>
+            <text x="270" y="403">header</text>
+
+            <path d="M201 498 H262"/><circle cx="201" cy="498" r="3.4"/>
+            <text x="270" y="505">USB-A</text>
+          </g>
+          <g class="callout end">
+            <path d="M84 307 H50"/><circle cx="84" cy="307" r="3.4"/>
+            <text x="42" y="299">X1</text>
+            <text x="42" y="327" class="sub">12 MHz</text>
+
+            <path d="M104 407 H50"/><circle cx="104" cy="407" r="3.4"/>
+            <text x="42" y="399">MCU</text>
+            <text x="42" y="427" class="sub">reverse</text>
+          </g>
+        </svg>
+        <figcaption>Fig. 1 &mdash; NEW DUC v2.0, component side</figcaption>
+      </figure>
+
+      <dl class="spec">
+        <div><dt>MCU</dt><dd>AT32UC3B1256</dd></div>
+        <div><dt>Flash</dt><dd>256 KB</dd></div>
+        <div><dt>App ID</dt><dd>03EB : 2402</dd></div>
+        <div><dt>DFU ID</dt><dd>03EB : 2FF6</dd></div>
+      </dl>
+    </aside>
+
+    <!-- ─────────── wizard ─────────── -->
+    <section class="panel">
+
+      <ol class="rail" id="rail" aria-label="Progress">
+        <li data-step="0"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Brief</b></button></li>
+        <li data-step="1"><button type="button" class="railbtn" disabled><span class="pip"></span><b>DFU</b></button></li>
+        <li data-step="2"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Connect</b></button></li>
+        <li data-step="3"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Flash</b></button></li>
+      </ol>
+
+      <div class="views" id="views">
+
+        <!-- 0 -->
+        <section class="view is-on" data-step="0">
+          <p class="kicker">Step 01 of 04</p>
+          <h1>Read this first.</h1>
+          <p>This writes open firmware over the stock image on a Hak5 USB Rubber
+            Ducky. It is meant for a board that is already bricked.</p>
+          <p class="warn">The stock firmware cannot be put back from this page.
+            Do not run it on a device that still works.</p>
+          <div class="acts">
+            <button class="btn solid" data-go="1">Understood, begin</button>
+          </div>
+        </section>
+
+        <!-- 1 -->
+        <section class="view" data-step="1">
+          <p class="kicker">Step 02 of 04</p>
+          <h1>Enter DFU mode.</h1>
+          <p>Hold <code>SW1</code>, the button next to the crystal, while
+            plugging the board into USB. Let go after about a second. It stops
+            presenting as a keyboard and waits for firmware instead.</p>
+          <p>On Windows, run <a href="https://github.com/pbatard/libwdi/releases/latest/download/zadig-2.9.exe" download>Zadig</a>
+            once per machine to bind the DFU device to WinUSB, or the browser
+            cannot open it.</p>
+          <div class="acts">
+            <button class="btn solid" id="btnConfirmPlug">It is in DFU mode</button>
+            <button class="btn ghost" data-go="0">Back</button>
+          </div>
+        </section>
+
+        <!-- 2 -->
+        <section class="view" data-step="2">
+          <p class="kicker">Step 03 of 04</p>
+          <h1>Connect.</h1>
+          <p>Pick the device in the browser prompt. It is listed under vendor
+            <code>03EB</code>, product <code>2FF6</code>.</p>
+          <div class="acts">
+            <button class="btn solid" id="btnConnect"><span class="ring-sm" aria-hidden="true"></span><span>Connect</span></button>
+            <button class="btn ghost" data-go="1">Back</button>
+          </div>
+        </section>
+
+        <!-- 3 -->
+        <section class="view" data-step="3">
+          <p class="kicker">Step 04 of 04</p>
+          <h1>Flash.</h1>
+          <p>One cell per 512-byte page. Do not unplug until the log says so.</p>
+
+          <div class="pagemap" id="pagemap"
+               role="progressbar" aria-valuemin="0" aria-valuemax="100"
+               aria-valuenow="0" aria-label="Flash progress"></div>
+
+          <p class="readout">
+            <b><span id="rdDone">0</span> / <span id="rdTotal">27,880</span> B</b>
+            <span><span id="rdPages">0</span> / <span id="rdPagesTotal">55</span> pages</span>
+            <span class="ph" id="phase">ready</span>
+          </p>
+
+          <dl class="mini">
+            <div><dt>Image</dt><dd id="pickName">firmware.hex</dd></div>
+            <div><dt>Extent</dt><dd id="pickExtent">0x80002000 &rarr; 0x80008ce7</dd></div>
+          </dl>
+
+          <p class="inline-err" id="flashErr" hidden></p>
+
+          <div class="acts">
+            <button class="btn solid hold" id="btnFlash" disabled>
+              <span class="hold-fill" aria-hidden="true"></span>
+              <span class="hold-label">Hold to flash</span>
+            </button>
+            <button class="btn ghost danger" id="btnStop" type="button">Stop flash</button>
+            <label class="btn ghost filebtn">Choose .hex<input id="fileHex" type="file" accept=".hex"></label>
+            <button class="btn ghost" data-go="2">Reconnect</button>
+          </div>
+          <label class="chk"><input type="checkbox" id="flashMany"> Flash multiple devices <span>— re-arm for the next unit after each success</span></label>
+        </section>
+
+        <!-- 4 -->
+        <section class="view" data-step="4">
+          <p class="kicker done-k">Complete</p>
+          <h1>Flashed.</h1>
+          <p>The board has been reset and will re-enumerate as an HID keyboard
+            running the new firmware. You can unplug it now.</p>
+          <div class="acts">
+            <button class="btn ghost" data-go="1">Flash another</button>
+            <a class="btn ghost" href="https://github.com/QWavey/Rubberless-Ducky" target="_blank" rel="noopener">Firmware repo</a>
+          </div>
+        </section>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- ─────────── bottom strip ─────────── -->
+  <footer class="box-bot">
+    <p class="footstat" id="footStat" role="status" aria-live="polite">ready</p>
+    <div class="botbtns">
+      <button class="tabbtn" id="btnFiles" aria-expanded="false" aria-controls="filesDrawer">Files</button>
+      <button class="tabbtn" id="btnConsole" aria-expanded="false" aria-controls="console">Log</button>
+      <a class="tabbtn" href="https://github.com/QWavey/WebFlasher" target="_blank" rel="noopener">GitHub &#8599;</a>
+    </div>
+  </footer>
+
+  <!-- ─────────── drawers ─────────── -->
+  <div class="drawer" id="filesDrawer" inert>
+    <div class="drawer-head"><b>Files</b>
+      <button class="x" data-close="filesDrawer" aria-label="Close files">&times;</button></div>
+    <ul class="dl-list">
+      <li><a href="./firmware.hex" download><b>firmware.hex</b><span>The image this flasher uses. 27,880 bytes of program data.</span></a></li>
+      <li><a href="https://raw.githubusercontent.com/QWavey/Rubberless-Ducky/version-8/tools/dfu-programmer.exe" download><b>dfu-programmer.exe</b><span>Command line flasher, Windows build.</span></a></li>
+      <li><a href="https://github.com/pbatard/libwdi/releases/latest/download/zadig-2.9.exe" download><b>Zadig 2.9</b><span>Installs the WinUSB driver. Windows only, needed once.</span></a></li>
+      <li><a href="https://github.com/QWavey/Rubberless-Ducky/releases/download/tools-latest/atmel-tools.zip" download><b>atmel-tools.zip</b><span>Toolchain, sources and libusb.</span></a></li>
+    </ul>
+  </div>
+
+  <div class="drawer" id="console" inert>
+    <div class="drawer-head"><b>Log</b>
+      <button class="x" data-close="console" aria-label="Close log">&times;</button></div>
+    <div class="drawer-log" id="consoleOut" role="log" aria-live="polite"></div>
+  </div>
+
+</article>
+
+<p class="legal">
+  Clean-room reimplementation. No Hak5 code, firmware or artwork is distributed
+  here. &ldquo;Hak5&rdquo; and &ldquo;USB Rubber Ducky&rdquo; are trademarks of
+  their respective owners, used only to describe compatibility. Everything runs
+  in your browser; nothing is uploaded.
+  <a href="https://github.com/QWavey/Rubberless-Ducky#legal" target="_blank" rel="noopener">Full note</a>.
+</p>
+
+</div>
+
+<script src="./js/flasher.js"></script>
+</body>
+</html>

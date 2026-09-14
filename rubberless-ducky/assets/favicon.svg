@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#b23f0d"/>
+  <!-- Duck in the background, faded -->
+  <g opacity="0.32" fill="#fff5e6">
+    <ellipse cx="20" cy="21" rx="10" ry="6"/>
+    <circle cx="26" cy="14" r="4.5"/>
+    <path d="M30 13 L32 12.5 L32 15.5 L30 15 Z"/>
+    <circle cx="27" cy="12.5" r="0.7" fill="#16110c"/>
+  </g>
+  <!-- USB stick in the foreground (clean silhouette) -->
+  <g fill="#fff5e6">
+    <rect x="12.5" y="3.5" width="7" height="6"/>
+    <rect x="14" y="5.5" width="1.4" height="2" fill="#b23f0d"/>
+    <rect x="16.6" y="5.5" width="1.4" height="2" fill="#b23f0d"/>
+    <rect x="11" y="9.5" width="10" height="18" rx="1"/>
+  </g>
+</svg>
