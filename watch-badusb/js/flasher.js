@@ -205,14 +205,11 @@ async function loadManifestImages() {
     parts.push({ data: bufToBinaryString(buf), address: p.offset, bytes: buf.byteLength });
     log(`image: ${p.path} ${buf.byteLength} B @ 0x${p.offset.toString(16)}`);
   }
-  // Clock blob at the coredump partition (0x3F0000) — huge_app.csv puts
-  // 64 KiB there, we only touch the first sector.
-  const clock = buildClockBlob();
-  parts.push({ data: bufToBinaryStr(clock.buf), address: 0x3F0000,
-               bytes: clock.buf.byteLength });
-  const tzSign = clock.tz >= 0 ? '+' : '-';
-  const tzHrs = Math.abs(clock.tz) / 3600;
-  log(`clock: epoch=${clock.epoch} tz=${tzSign}${tzHrs.toFixed(2)}h → 0x3F0000`);
+  // Note: clock blob is NOT added here — it's injected fresh at runFlash()
+  // time so the epoch is captured just before the sector actually writes.
+  // Old behaviour bundled it into `images` at page-load time, which meant
+  // the epoch was minutes stale by the time writeFlash + hard-reset ran
+  // (user report: "clock is 3-4 minutes late").
   if ($('pickName')) $('pickName').textContent = `full image · v${man.version || '?'}`;
   return parts;
 }
@@ -239,6 +236,7 @@ async function connect() {
     setStatus(chip, 'ok');
     if (!images && !CFG.encrypted) { try { images = await loadManifestImages(); } catch (e) { log('images: ' + e.message, 'err'); } }
     if ($('btnFlash')) $('btnFlash').disabled = !images;
+    if ($('btnErase')) $('btnErase').disabled = false;
     goTo(FLASH_STEP);
   } catch (e) {
     if (e && (e.name === 'NotFoundError' || /No port selected/i.test(e.message || ''))) log('connect: no device picked');
@@ -248,6 +246,33 @@ async function connect() {
   } finally { if (btn) btn.classList.remove('loading'); }
 }
 if ($('btnConnect')) $('btnConnect').onclick = connect;
+
+// Task #9: "Just erase" — one-click chip erase. Wipes NVS + firmware
+// completely, leaves the flash filled with 0xFF. Used to recover a
+// bricked/loop-stuck unit without immediately writing new firmware.
+async function runErase() {
+  if (!esploader) { log('erase: connect first', 'err'); return; }
+  if (!confirm('Erase the whole flash chip? This wipes firmware, NVS, saved WiFi and every setting. Cannot be undone.')) return;
+  const btnE = $('btnErase'); const btnF = $('btnFlash');
+  if (btnE) btnE.disabled = true;
+  if (btnF) btnF.disabled = true;
+  setStatus('Erasing', 'live');
+  try {
+    setPhase && setPhase('writing');
+    await esploader.eraseFlash();
+    log('erase: done', 'ok');
+    setStatus('Erased', 'ok');
+    try { await esploader.after('hard_reset'); } catch (_) {}
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : String(e);
+    log('erase: ' + msg, 'err');
+    setStatus('Erase failed', 'error');
+  } finally {
+    if (btnE) btnE.disabled = false;
+    if (btnF) btnF.disabled = !images;
+  }
+}
+if ($('btnErase')) $('btnErase').onclick = runErase;
 
 if ($('fileBin')) $('fileBin').onchange = async ev => {
   const f = ev.target.files[0]; if (!f) return;
@@ -270,16 +295,26 @@ async function runFlash() {
   mapState(null); showFlashError(null); showBatchNote(null);
   setStatus('Flashing', 'live');
 
-  const total = images.reduce((n, p) => n + p.bytes, 0);
-  const before = []; let acc = 0; for (const p of images) { before.push(acc); acc += p.bytes; }
+  // Task #7: build the clock blob NOW (not at page-load) so its epoch is
+  // captured just before esptool writes the sector.
+  const clock = buildClockBlob();
+  const tzSign = clock.tz >= 0 ? '+' : '-';
+  const tzHrs = Math.abs(clock.tz) / 3600;
+  log(`clock: epoch=${clock.epoch} tz=${tzSign}${tzHrs.toFixed(2)}h → 0x3F0000`);
+  const clockPart = { data: bufToBinaryStr(clock.buf), address: 0x3F0000,
+                      bytes: clock.buf.byteLength };
+  const flashParts = images.concat([clockPart]);
+
+  const total = flashParts.reduce((n, p) => n + p.bytes, 0);
+  const before = []; let acc = 0; for (const p of flashParts) { before.push(acc); acc += p.bytes; }
   buildPageMap(Math.max(24, Math.round(total / 4096)));
-  if ($('rdParts')) $('rdParts').textContent = `0 / ${images.length} parts`;
+  if ($('rdParts')) $('rdParts').textContent = `0 / ${flashParts.length} parts`;
   paintProgress(0, total);
 
   try {
     setPhase('writing');
     await esploader.writeFlash({
-      fileArray: images.map(p => ({ data: p.data, address: p.address })),
+      fileArray: flashParts.map(p => ({ data: p.data, address: p.address })),
       flashSize: CFG.flashSize,
       flashMode: CFG.flashMode,
       flashFreq: CFG.flashFreq,
@@ -291,7 +326,7 @@ async function runFlash() {
       reportProgress: (fileIndex, written, fileTotal) => {
         const done = (before[fileIndex] || 0) + written;
         paintProgress(done, total);
-        if ($('rdParts')) $('rdParts').textContent = `${written >= fileTotal ? fileIndex + 1 : fileIndex} / ${images.length} parts`;
+        if ($('rdParts')) $('rdParts').textContent = `${written >= fileTotal ? fileIndex + 1 : fileIndex} / ${flashParts.length} parts`;
       },
     });
     setPhase('resetting');

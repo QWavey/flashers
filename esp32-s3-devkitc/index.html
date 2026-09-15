@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP-32-S3-DevKitC-BadUSB WebFlasher</title>
+<meta name="description" content="BadUSB firmware for the ESP32-S3-DevKitC-1 dev board — flashed straight from the browser.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body class="">
+
+<noscript>
+  <p class="noscript">This flasher talks to the device from the page itself, so
+  it needs JavaScript enabled.</p>
+</noscript>
+
+<div class="stage">
+
+<article class="box" id="box">
+
+  <header class="box-top">
+    <div class="box-lead">
+      <a class="backlink" href="https://qwavey.github.io/flashers/"><span class="bl-arrow" aria-hidden="true">&#8592;</span> All flashers</a>
+      <p class="brandline">ESP-WATCH<span class="sep">&middot;</span>BADUSB
+        <span class="ver">WebFlasher</span></p>
+    </div>
+    <p class="status" id="status" data-state="idle"><span class="dot" aria-hidden="true"></span><span id="statusText">No device</span></p>
+  </header>
+
+  <div class="box-body">
+
+    <aside class="slab">
+      <figure class="fig">
+        <svg viewBox="0 0 640 320" xmlns="http://www.w3.org/2000/svg" class="device" role="img" aria-label="ESP32-S3-DevKitC-1 dev board">
+          <!-- PCB outline -->
+          <rect class="shell" x="80" y="70" width="480" height="180" rx="6" fill="none"/>
+          <!-- USB-C at the top -->
+          <rect class="detail" x="290" y="52" width="60" height="26" rx="3" fill="none"/>
+          <text class="label" x="320" y="46" text-anchor="middle" font-size="14">USB-C</text>
+          <!-- ESP32-S3 module footprint -->
+          <rect class="detail" x="200" y="120" width="240" height="80" rx="4" fill="none"/>
+          <text class="label" x="320" y="164" text-anchor="middle" font-size="16">ESP32-S3</text>
+          <text class="label" x="320" y="184" text-anchor="middle" font-size="11">R8N16</text>
+          <!-- BOOT + EN buttons -->
+          <rect class="detail" x="120" y="150" width="24" height="24" rx="3" fill="none"/>
+          <text class="label" x="132" y="192" text-anchor="middle" font-size="11">BOOT</text>
+          <rect class="detail" x="496" y="150" width="24" height="24" rx="3" fill="none"/>
+          <text class="label" x="508" y="192" text-anchor="middle" font-size="11">EN</text>
+        </svg>
+        <figcaption>Fig. 1 — ESP32-S3-DevKitC-1 board (simplified)</figcaption>
+      </figure>
+      <dl class="spec">
+        <div><dt>MCU</dt><dd>ESP32-S3</dd></div>
+        <div><dt>Screen</dt><dd>410x502 AMOLED</dd></div>
+        <div><dt>Flash</dt><dd>32 MB</dd></div>
+        <div><dt>PSRAM</dt><dd>OPI PSRAM</dd></div>
+        <div><dt>Link</dt><dd>WebSerial</dd></div>
+      </dl>
+    </aside>
+
+    <section class="panel">
+
+      <ol class="rail" id="rail" aria-label="Progress">
+        <li data-step="0"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Brief</b></button></li>
+        <li data-step="1"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Boot</b></button></li>
+        <li data-step="2"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Connect</b></button></li>
+        <li data-step="3"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Flash</b></button></li>
+      </ol>
+
+      <div class="views" id="views">
+        <section class="view is-on" data-step="0">
+          <p class="kicker">Step 01 of 04</p>
+          <h1>Read this first.</h1>
+          <p>This writes the ESP-32-S3-DevKitC-BadUSB firmware onto the DevKitC-1. It replaces the firmware currently on it.</p>
+          <p class="warn">Flashing overwrites the app partition. SD-card files are not touched, but the firmware is. Only run this on your own hardware.</p>
+          <div class="acts"><button class="btn solid" data-go="1">Understood, begin</button></div>
+        </section>
+
+        <section class="view" data-step="1">
+          <p class="kicker">Step 02 of 04</p>
+          <h1>Download mode.</h1>
+          <p>The ESP32-S3 flashes over its own USB. If the board does not drop into download mode on its own when the flasher connects, hold BOOT while plugging the USB-C cable in, then let go.</p>
+          <p>Chrome or Edge only — Firefox and Safari have no WebSerial.</p>
+          <div class="acts"><button class="btn solid" data-go="2">Ready</button>
+            <button class="btn ghost" data-go="0">Back</button></div>
+        </section>
+
+        <section class="view" data-step="2">
+          <p class="kicker">Step 03 of 04</p>
+          <h1>Connect.</h1>
+          <p>Pick the device in the browser prompt. It appears under vendor 303A (Espressif) as a USB serial port.</p>
+          <div class="acts"><button class="btn solid" id="btnConnect"><span class="ring-sm" aria-hidden="true"></span><span>Connect</span></button>
+            <button class="btn ghost" data-go="1">Back</button></div>
+        </section>
+
+        <section class="view" data-step="3">
+          <p class="kicker">Step 04 of 04</p>
+          <h1>Flash.</h1>
+          <p>Erase, then write each image at its offset, then reboot. Do not unplug the board until the log says it is done.</p>
+          <div class="pagemap" id="pagemap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Flash progress"></div>
+          <p class="readout"><b><span id="rdDone">0</span> / <span id="rdTotal">0</span> KB</b><span id="rdParts">0 / 0 parts</span><span class="ph" id="phase">ready</span></p>
+          <dl class="mini"><div><dt>Image</dt><dd id="pickName">firmware</dd></div><div><dt>Chip</dt><dd id="pickChip">ESP32-S3</dd></div></dl>
+          <label class="batchbar"><input type="checkbox" id="flashMany"> Flash multiple devices</label>
+          <label class="batchbar"><input type="checkbox" id="fullErase" checked> Fully erase flash before writing (wipes NVS &amp; saved WiFi/settings)</label>
+          <p class="inline-err" id="flashErr" hidden></p>
+          <p class="batchnote" id="batchNote" hidden></p>
+          <div class="acts"><button class="btn solid hold" id="btnFlash" disabled><span class="hold-fill" aria-hidden="true"></span><span class="hold-label">Hold to flash</span></button>
+            <button class="btn ghost danger" id="btnErase" type="button" disabled>Just erase</button>
+            <label class="btn ghost filebtn">Choose file<input id="fileBin" type="file" accept=".bin"></label>
+            <button class="btn ghost" data-go="2">Reconnect</button></div>
+        </section>
+
+        <section class="view" data-step="4">
+          <p class="kicker done-k">Complete</p>
+          <h1>Flashed.</h1>
+          <p>The device has been reset and is running the new firmware. You can unplug it now.</p>
+          <div class="acts">
+            <button class="btn ghost" data-go="2">Flash another</button>
+            <a class="btn ghost" href="https://github.com/QWavey/ESP-32-S3-devkitc-BadUSB" target="_blank" rel="noopener">Repo</a>
+          </div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <footer class="box-bot">
+    <p class="footstat" id="footStat" role="status" aria-live="polite">ready</p>
+    <div class="botbtns">
+      <button class="tabbtn" id="btnFiles" aria-expanded="false" aria-controls="filesDrawer">Files</button>
+      <button class="tabbtn" id="btnConsole" aria-expanded="false" aria-controls="console">Log</button>
+      <a class="tabbtn" href="https://github.com/QWavey/ESP-S3-Key-BadUSB" target="_blank" rel="noopener">GitHub &#8599;</a>
+    </div>
+  </footer>
+
+  <div class="drawer" id="filesDrawer" inert>
+    <div class="drawer-head"><b>Files</b><button class="x" data-close="filesDrawer" aria-label="Close files">&times;</button></div>
+    <ul class="dl-list"><li><a href="firmware/firmware.bin" download><b>firmware.bin</b><span>Application image (offset 0x10000).</span></a></li><li><a href="firmware/bootloader.bin" download><b>bootloader.bin</b><span>Second-stage bootloader (offset 0x0).</span></a></li><li><a href="firmware/partitions.bin" download><b>partitions.bin</b><span>Partition table (offset 0x8000).</span></a></li><li><a href="firmware/manifest.json" download><b>manifest.json</b><span>Offsets and versions the flasher reads.</span></a></li></ul>
+  </div>
+
+  <div class="drawer" id="console" inert>
+    <div class="drawer-head"><b>Log</b><button class="x" data-close="console" aria-label="Close log">&times;</button></div>
+    <div class="drawer-log" id="consoleOut" role="log" aria-live="polite"></div>
+  </div>
+
+</article>
+
+<p class="legal">Runs entirely in your browser over your own USB connection. Nothing is uploaded. <a href="https://github.com/QWavey/ESP-S3-Key-BadUSB" target="_blank" rel="noopener">Source</a>.</p>
+
+</div>
+
+
+<script type="module" src="./js/flasher.js"></script>
+</body>
+</html>

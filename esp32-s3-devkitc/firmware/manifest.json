@@ -1,5 +1,5 @@
 {
-  "name": "ESP-Watch-BadUSB",
+  "name": "ESP-32-S3-DevKitC-BadUSB",
   "version": "WebFlasher",
   "chip": "ESP32-S3",
   "flashSize": "keep",
@@ -7,6 +7,6 @@
     { "path": "bootloader.bin", "offset": 0,     "size": 19968 },
     { "path": "partitions.bin", "offset": 32768, "size": 3072 },
     { "path": "boot_app0.bin",  "offset": 57344, "size": 8192 },
-    { "path": "firmware.bin",   "offset": 65536, "size": 2251232 }
+    { "path": "firmware.bin",   "offset": 65536, "size": 1557632 }
   ]
 }
