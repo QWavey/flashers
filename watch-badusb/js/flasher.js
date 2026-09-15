@@ -160,6 +160,41 @@ async function fetchPart(path) {
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
   return r.arrayBuffer();
 }
+// Flash-time clock blob — packed into a tiny binary that the firmware reads
+// from the head of the coredump partition (0x3F0000) at boot and consumes
+// once. Lays out as:
+//   uint32 LE magic  0xC10CBA5E
+//   uint64 LE epoch  UTC seconds at flash time
+//   int32  LE tz     local timezone offset, seconds east of UTC
+//   uint32 LE pad
+// A 4 KiB payload keeps the erase aligned to the flash sector.
+function buildClockBlob() {
+  const SECTOR = 4096;
+  const buf = new ArrayBuffer(SECTOR);
+  const view = new DataView(buf);
+  const epoch = BigInt(Math.floor(Date.now() / 1000));
+  // JS getTimezoneOffset() returns MINUTES WEST of UTC. Firmware wants
+  // SECONDS EAST of UTC, so negate + × 60.
+  const tz = -new Date().getTimezoneOffset() * 60;
+  view.setUint32 (0,  0xC10CBA5E,       true);
+  view.setBigUint64(4,  epoch,          true);
+  view.setInt32  (12, tz,               true);
+  view.setUint32 (16, 0,                true);
+  // Fill the rest with 0xFF to match erased-flash state — every byte
+  // still needs writing so the target's stale magic (if any) is wiped.
+  const tail = new Uint8Array(buf, 20);
+  for (let i = 0; i < tail.length; i++) tail[i] = 0xFF;
+  return { buf, epoch: Number(epoch), tz };
+}
+
+// Convert an ArrayBuffer to esptool.js's expected binary string form.
+function bufToBinaryStr(buf) {
+  const b = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return s;
+}
+
 async function loadManifestImages() {
   const r = await fetch('./firmware/manifest.json', { cache: 'no-store' });
   if (!r.ok) throw new Error(`manifest.json: HTTP ${r.status}`);
@@ -170,6 +205,14 @@ async function loadManifestImages() {
     parts.push({ data: bufToBinaryString(buf), address: p.offset, bytes: buf.byteLength });
     log(`image: ${p.path} ${buf.byteLength} B @ 0x${p.offset.toString(16)}`);
   }
+  // Clock blob at the coredump partition (0x3F0000) — huge_app.csv puts
+  // 64 KiB there, we only touch the first sector.
+  const clock = buildClockBlob();
+  parts.push({ data: bufToBinaryStr(clock.buf), address: 0x3F0000,
+               bytes: clock.buf.byteLength });
+  const tzSign = clock.tz >= 0 ? '+' : '-';
+  const tzHrs = Math.abs(clock.tz) / 3600;
+  log(`clock: epoch=${clock.epoch} tz=${tzSign}${tzHrs.toFixed(2)}h → 0x3F0000`);
   if ($('pickName')) $('pickName').textContent = `full image · v${man.version || '?'}`;
   return parts;
 }
