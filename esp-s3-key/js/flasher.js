@@ -201,6 +201,20 @@ $('btnConnect').onclick = async () => {
     $('pickChip').textContent = chip;
     setStatus(chip, 'ok');
     if (!images) { try { images = await loadManifestImages(); } catch (e) { log('images: ' + e.message, 'err'); } }
+    // Hardware-detect: warn on mismatch, demote Flash button to red
+    // "Flash anyway". Target: ESP32-S3 Key dongle.
+    const EXPECTED = 'ESP32-S3';
+    if (!String(chip || '').toUpperCase().includes(EXPECTED)) {
+      log(`chip mismatch: expected ${EXPECTED}, saw ${chip}`, 'err');
+      const btnF = $('btnFlash');
+      if (btnF) {
+        btnF.classList.add('danger');
+        const lbl = btnF.querySelector('.hold-label');
+        if (lbl) lbl.textContent = 'Flash anyway';
+      }
+      const err = $('flashErr');
+      if (err) { err.hidden = false; err.textContent = `Connected chip is ${chip}. This flasher targets ${EXPECTED}. Flashing anyway may brick it.`; }
+    }
     $('btnFlash').disabled = !images;
     if ($('btnErase')) $('btnErase').disabled = false;
     goTo(3);

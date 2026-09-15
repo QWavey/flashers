@@ -37,21 +37,88 @@
 
     <aside class="slab">
       <figure class="fig">
-        <svg viewBox="0 0 640 320" xmlns="http://www.w3.org/2000/svg" class="device" role="img" aria-label="ESP32-S3-DevKitC-1 dev board">
-          <!-- PCB outline -->
-          <rect class="shell" x="80" y="70" width="480" height="180" rx="6" fill="none"/>
-          <!-- USB-C at the top -->
-          <rect class="detail" x="290" y="52" width="60" height="26" rx="3" fill="none"/>
-          <text class="label" x="320" y="46" text-anchor="middle" font-size="14">USB-C</text>
-          <!-- ESP32-S3 module footprint -->
-          <rect class="detail" x="200" y="120" width="240" height="80" rx="4" fill="none"/>
-          <text class="label" x="320" y="164" text-anchor="middle" font-size="16">ESP32-S3</text>
-          <text class="label" x="320" y="184" text-anchor="middle" font-size="11">R8N16</text>
-          <!-- BOOT + EN buttons -->
-          <rect class="detail" x="120" y="150" width="24" height="24" rx="3" fill="none"/>
-          <text class="label" x="132" y="192" text-anchor="middle" font-size="11">BOOT</text>
-          <rect class="detail" x="496" y="150" width="24" height="24" rx="3" fill="none"/>
-          <text class="label" x="508" y="192" text-anchor="middle" font-size="11">EN</text>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" class="device" role="img" aria-labelledby="figtitle">
+          <title id="figtitle">ESP32-S3-DevKitC-1 — dev board, USB-C at the top, ESP32-S3-WROOM-1 module centered, BOOT + RST tact buttons at the bottom edge, 2×22 pin headers on the flanks, WS2812 RGB LED at the top-right, 3V3/GND/EN silkscreen labels around the perimeter.</title>
+          <!-- PCB body -->
+          <rect class="pcb" x="60" y="40" width="600" height="240" rx="10" fill="none" stroke="currentColor" stroke-width="2.4"/>
+          <!-- corner mounting holes -->
+          <circle class="drill" cx="82"  cy="62"  r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <circle class="drill" cx="638" cy="62"  r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <circle class="drill" cx="82"  cy="258" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <circle class="drill" cx="638" cy="258" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <!-- USB-C receptacle at top center -->
+          <rect class="conn" x="316" y="10" width="88" height="42" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <line x1="316" y1="26" x2="404" y2="26" stroke="currentColor" stroke-width="0.9"/>
+          <text x="360" y="6" text-anchor="middle" font-size="12" fill="currentColor">USB-C</text>
+          <!-- ESP32-S3-WROOM-1 module: metal shield with rounded corners -->
+          <rect class="module" x="220" y="98" width="280" height="130" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
+          <!-- module IPEX antenna cutout on left flank -->
+          <path class="silk" d="M220 118 L206 118 L206 208 L220 208" fill="none" stroke="currentColor" stroke-width="0.9"/>
+          <!-- module label -->
+          <text x="360" y="150" text-anchor="middle" font-size="18" font-weight="600" fill="currentColor">ESP32-S3-WROOM-1</text>
+          <text x="360" y="172" text-anchor="middle" font-size="12" fill="currentColor">N16R8</text>
+          <text x="360" y="196" text-anchor="middle" font-size="10" fill="currentColor" opacity="0.75">FCC ID · 2AC7Z-ESPS3WROOM1</text>
+          <!-- BOOT + RST buttons at bottom edge -->
+          <rect class="button" x="176" y="230" width="34" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <text x="193" y="252" text-anchor="middle" font-size="11" fill="currentColor">BOOT</text>
+          <rect class="button" x="510" y="230" width="34" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <text x="527" y="252" text-anchor="middle" font-size="11" fill="currentColor">RST</text>
+          <!-- WS2812 RGB LED top-right -->
+          <rect class="led" x="588" y="82" width="20" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <text x="598" y="118" text-anchor="middle" font-size="10" fill="currentColor">RGB</text>
+          <!-- Pin headers: left column -->
+          <g class="pins" fill="none" stroke="currentColor" stroke-width="1">
+            <circle cx="110" cy="70" r="2.5"/>
+            <circle cx="610" cy="70" r="2.5"/>
+            <circle cx="110" cy="79" r="2.5"/>
+            <circle cx="610" cy="79" r="2.5"/>
+            <circle cx="110" cy="88" r="2.5"/>
+            <circle cx="610" cy="88" r="2.5"/>
+            <circle cx="110" cy="97" r="2.5"/>
+            <circle cx="610" cy="97" r="2.5"/>
+            <circle cx="110" cy="106" r="2.5"/>
+            <circle cx="610" cy="106" r="2.5"/>
+            <circle cx="110" cy="115" r="2.5"/>
+            <circle cx="610" cy="115" r="2.5"/>
+            <circle cx="110" cy="124" r="2.5"/>
+            <circle cx="610" cy="124" r="2.5"/>
+            <circle cx="110" cy="133" r="2.5"/>
+            <circle cx="610" cy="133" r="2.5"/>
+            <circle cx="110" cy="142" r="2.5"/>
+            <circle cx="610" cy="142" r="2.5"/>
+            <circle cx="110" cy="151" r="2.5"/>
+            <circle cx="610" cy="151" r="2.5"/>
+            <circle cx="110" cy="160" r="2.5"/>
+            <circle cx="610" cy="160" r="2.5"/>
+            <circle cx="110" cy="169" r="2.5"/>
+            <circle cx="610" cy="169" r="2.5"/>
+            <circle cx="110" cy="178" r="2.5"/>
+            <circle cx="610" cy="178" r="2.5"/>
+            <circle cx="110" cy="187" r="2.5"/>
+            <circle cx="610" cy="187" r="2.5"/>
+            <circle cx="110" cy="196" r="2.5"/>
+            <circle cx="610" cy="196" r="2.5"/>
+            <circle cx="110" cy="205" r="2.5"/>
+            <circle cx="610" cy="205" r="2.5"/>
+            <circle cx="110" cy="214" r="2.5"/>
+            <circle cx="610" cy="214" r="2.5"/>
+            <circle cx="110" cy="223" r="2.5"/>
+            <circle cx="610" cy="223" r="2.5"/>
+            <circle cx="110" cy="232" r="2.5"/>
+            <circle cx="610" cy="232" r="2.5"/>
+            <circle cx="110" cy="241" r="2.5"/>
+            <circle cx="610" cy="241" r="2.5"/>
+            <circle cx="110" cy="250" r="2.5"/>
+            <circle cx="610" cy="250" r="2.5"/>
+            <circle cx="110" cy="259" r="2.5"/>
+            <circle cx="610" cy="259" r="2.5"/>
+          </g>
+          <!-- Silkscreen labels around perimeter -->
+          <text x="110" y="60" text-anchor="middle" font-size="9" fill="currentColor" opacity="0.7">3V3</text>
+          <text x="610" y="60" text-anchor="middle" font-size="9" fill="currentColor" opacity="0.7">GND</text>
+          <text x="110" y="275" text-anchor="middle" font-size="9" fill="currentColor" opacity="0.7">EN</text>
+          <text x="610" y="275" text-anchor="middle" font-size="9" fill="currentColor" opacity="0.7">5V</text>
+          <text x="360" y="274" text-anchor="middle" font-size="10" fill="currentColor" opacity="0.8">ESP32-S3-DevKitC-1</text>
         </svg>
         <figcaption>Fig. 1 — ESP32-S3-DevKitC-1 board (simplified)</figcaption>
       </figure>

@@ -234,6 +234,22 @@ async function connect() {
     log(`connect: ${chip}`, 'ok');
     if ($('pickChip')) $('pickChip').textContent = chip;
     setStatus(chip, 'ok');
+    // Hardware-detect: warn on mismatch and demote the primary Flash
+    // button into a red "Flash anyway" button. This flasher targets the
+    // ESP32-S3 (Waveshare Touch-AMOLED 2.06" watch). Any other chip that
+    // esptool.main() reports gets flagged.
+    const EXPECTED = 'ESP32-S3';
+    const chipMatches = String(chip || '').toUpperCase().includes(EXPECTED);
+    if (!chipMatches) {
+      log(`chip mismatch: expected ${EXPECTED}, saw ${chip}`, 'err');
+      showFlashError(`Connected chip is ${chip}. This flasher targets ${EXPECTED} (Waveshare Touch-AMOLED watch). Flashing anyway may brick it.`);
+      const btnF = $('btnFlash');
+      if (btnF) {
+        btnF.classList.add('danger');
+        const lbl = btnF.querySelector('.hold-label');
+        if (lbl) lbl.textContent = 'Flash anyway';
+      }
+    }
     if (!images && !CFG.encrypted) { try { images = await loadManifestImages(); } catch (e) { log('images: ' + e.message, 'err'); } }
     if ($('btnFlash')) $('btnFlash').disabled = !images;
     if ($('btnErase')) $('btnErase').disabled = false;

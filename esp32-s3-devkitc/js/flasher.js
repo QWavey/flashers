@@ -234,6 +234,19 @@ async function connect() {
     log(`connect: ${chip}`, 'ok');
     if ($('pickChip')) $('pickChip').textContent = chip;
     setStatus(chip, 'ok');
+    // Hardware-detect: warn on mismatch, demote Flash → red Flash anyway.
+    // Target: plain ESP32-S3-DevKitC-1.
+    const EXPECTED = 'ESP32-S3';
+    if (!String(chip || '').toUpperCase().includes(EXPECTED)) {
+      log(`chip mismatch: expected ${EXPECTED}, saw ${chip}`, 'err');
+      showFlashError(`Connected chip is ${chip}. This flasher targets ${EXPECTED} DevKitC-1. Flashing anyway may brick it.`);
+      const btnF = $('btnFlash');
+      if (btnF) {
+        btnF.classList.add('danger');
+        const lbl = btnF.querySelector('.hold-label');
+        if (lbl) lbl.textContent = 'Flash anyway';
+      }
+    }
     if (!images && !CFG.encrypted) { try { images = await loadManifestImages(); } catch (e) { log('images: ' + e.message, 'err'); } }
     if ($('btnFlash')) $('btnFlash').disabled = !images;
     if ($('btnErase')) $('btnErase').disabled = false;
