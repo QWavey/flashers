@@ -914,6 +914,9 @@ body[data-state="ok"] .fx-port { opacity: 1; animation: fxseat 0.5s var(--e-appl
 }
 .view .chk input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 .view .chk span { color: var(--gray-2); }
+.view .chk.bricked-recovery { color: #c86b6b; }
+.view .chk.bricked-recovery input { accent-color: #c86b6b; }
+.view .chk.bricked-recovery span { color: #a25858; }
 .btn.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--line-2)); }
 .btn.danger:hover { border-color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
 

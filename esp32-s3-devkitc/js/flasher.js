@@ -325,10 +325,13 @@ async function runFlash() {
       flashSize: CFG.flashSize,
       flashMode: CFG.flashMode,
       flashFreq: CFG.flashFreq,
-      // Watch flasher: honour the "Fully erase flash before writing" checkbox
-      // — overrides the CFG default (false). Checked = erase every sector
-      // first, wipes NVS + saved WiFi + stale silent_boot/bricked flags.
-      eraseAll: document.getElementById('fullErase')?.checked ?? CFG.eraseAll,
+      // Full-erase if EITHER "Fully erase" OR "Device was bricked before"
+      // is checked. Bricked-before is the recovery flow — reflashing the
+      // app alone leaves the bricked flag in NVS, so the device boots
+      // right back into brick mode. Full erase wipes NVS + WiFi creds.
+      eraseAll: (document.getElementById('fullErase')?.checked
+              || document.getElementById('brickedBefore')?.checked)
+              ?? CFG.eraseAll,
       compress: CFG.compress,
       reportProgress: (fileIndex, written, fileTotal) => {
         const done = (before[fileIndex] || 0) + written;
@@ -401,4 +404,19 @@ if (!('serial' in navigator)) {
   if ($('btnConnect')) $('btnConnect').disabled = true;
   setStatus('No WebSerial', 'error');
 }
+// Bricked-recovery UX: force-check + lock "Fully erase" when the user
+// checks "Device was bricked before". App-only reflashes leave the
+// bricked flag in NVS, so the recovery must wipe NVS.
+(function wireBrickedRecovery() {
+  const bb = document.getElementById('brickedBefore');
+  const fe = document.getElementById('fullErase');
+  if (!bb || !fe) return;
+  const sync = () => {
+    if (bb.checked) { fe.checked = true; fe.disabled = true; }
+    else            { fe.disabled = false; }
+  };
+  bb.addEventListener('change', sync);
+  sync();
+})();
+
 window.addEventListener('beforeunload', ev => { if (flashing) { ev.preventDefault(); ev.returnValue = ''; } });

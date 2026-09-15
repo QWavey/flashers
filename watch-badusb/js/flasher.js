@@ -334,10 +334,15 @@ async function runFlash() {
       flashSize: CFG.flashSize,
       flashMode: CFG.flashMode,
       flashFreq: CFG.flashFreq,
-      // Watch flasher: honour the "Fully erase flash before writing" checkbox
-      // — overrides the CFG default (false). Checked = erase every sector
-      // first, wipes NVS + saved WiFi + stale silent_boot/bricked flags.
-      eraseAll: document.getElementById('fullErase')?.checked ?? CFG.eraseAll,
+      // Watch flasher: force full-erase when EITHER "Fully erase" OR
+      // "Watch was bricked before" is checked. The bricked-before path
+      // is the recovery flow — reflashing the app alone leaves
+      // bricked=true in NVS, so the watch reboots straight into the
+      // black-screen loop again. Full erase wipes NVS + saved WiFi +
+      // stale silent_boot/bricked flags.
+      eraseAll: (document.getElementById('fullErase')?.checked
+              || document.getElementById('brickedBefore')?.checked)
+              ?? CFG.eraseAll,
       compress: CFG.compress,
       reportProgress: (fileIndex, written, fileTotal) => {
         const done = (before[fileIndex] || 0) + written;
@@ -410,4 +415,20 @@ if (!('serial' in navigator)) {
   if ($('btnConnect')) $('btnConnect').disabled = true;
   setStatus('No WebSerial', 'error');
 }
+// Bricked-recovery UX: when the user checks "Watch was bricked before",
+// force-check "Fully erase" and lock it so they can't accidentally uncheck
+// it — an app-only reflash of a bricked watch just re-enters the black
+// screen loop because bricked=true survives in NVS.
+(function wireBrickedRecovery() {
+  const bb = document.getElementById('brickedBefore');
+  const fe = document.getElementById('fullErase');
+  if (!bb || !fe) return;
+  const sync = () => {
+    if (bb.checked) { fe.checked = true; fe.disabled = true; }
+    else            { fe.disabled = false; }
+  };
+  bb.addEventListener('change', sync);
+  sync();
+})();
+
 window.addEventListener('beforeunload', ev => { if (flashing) { ev.preventDefault(); ev.returnValue = ''; } });

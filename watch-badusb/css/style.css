@@ -282,6 +282,8 @@ body[data-state="error"] .view .readout .ph { color: var(--err); }
 /* batch "flash many" banner + checkbox */
 .batchbar { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-3); font-family: var(--font-mono); font-size: 13px; color: var(--gray-1); }
 .batchbar input { width: 15px; height: 15px; accent-color: var(--accent); }
+.batchbar.bricked-recovery { color: #c86b6b; }
+.batchbar.bricked-recovery input { accent-color: #c86b6b; }
 .batchnote { margin: var(--s-3) 0 0; padding: var(--s-3) var(--s-4); border: 1px solid rgba(48, 209, 88, 0.35); border-radius: var(--r-2); background: rgba(48, 209, 88, 0.07); color: #A9F0BD; font-family: var(--font-mono); font-size: 13px; }
 .batchnote[hidden] { display: none; }
 

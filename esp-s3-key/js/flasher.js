@@ -297,7 +297,13 @@ async function runFlash() {
       flashFreq: 'keep',
       // Honour the "Fully erase flash before writing" checkbox — checked
       // by default so a clean slate is the norm.
-      eraseAll: document.getElementById('fullErase')?.checked ?? false,
+      // Full-erase if EITHER "Fully erase" OR "Device was bricked before"
+      // is checked. Bricked-before is the recovery flow — app-only
+      // reflash leaves bricked=true in NVS, so we must wipe the whole
+      // chip. See flashers-hub README section on recovery.
+      eraseAll: (document.getElementById('fullErase')?.checked
+              || document.getElementById('brickedBefore')?.checked)
+              ?? false,
       compress: true,
       reportProgress: (fileIndex, written, fileTotal) => {
         const done = (before[fileIndex] || 0) + written;
@@ -394,4 +400,18 @@ if (!('serial' in navigator)) {
   $('btnConnect').disabled = true;
   setStatus('No WebSerial', 'error');
 }
+// Bricked-recovery UX: force-check + lock "Fully erase" when the user
+// checks "Device was bricked before".
+(function wireBrickedRecovery() {
+  const bb = document.getElementById('brickedBefore');
+  const fe = document.getElementById('fullErase');
+  if (!bb || !fe) return;
+  const sync = () => {
+    if (bb.checked) { fe.checked = true; fe.disabled = true; }
+    else            { fe.disabled = false; }
+  };
+  bb.addEventListener('change', sync);
+  sync();
+})();
+
 window.addEventListener('beforeunload', ev => { if (flashing) { ev.preventDefault(); ev.returnValue = ''; } });

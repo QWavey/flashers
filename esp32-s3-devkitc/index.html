@@ -175,6 +175,7 @@
           <dl class="mini"><div><dt>Image</dt><dd id="pickName">firmware</dd></div><div><dt>Chip</dt><dd id="pickChip">ESP32-S3</dd></div></dl>
           <label class="batchbar"><input type="checkbox" id="flashMany"> Flash multiple devices</label>
           <label class="batchbar"><input type="checkbox" id="fullErase" checked> Fully erase flash before writing (wipes NVS &amp; saved WiFi/settings)</label>
+          <label class="batchbar bricked-recovery"><input type="checkbox" id="brickedBefore"> Device was bricked before (force full-erase to recover)</label>
           <p class="inline-err" id="flashErr" hidden></p>
           <p class="batchnote" id="batchNote" hidden></p>
           <div class="acts"><button class="btn solid hold" id="btnFlash" disabled><span class="hold-fill" aria-hidden="true"></span><span class="hold-label">Hold to flash</span></button>
