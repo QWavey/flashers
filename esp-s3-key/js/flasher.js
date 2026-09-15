@@ -256,7 +256,9 @@ async function runFlash() {
       flashSize: 'keep',
       flashMode: 'keep',
       flashFreq: 'keep',
-      eraseAll: false,
+      // Honour the "Fully erase flash before writing" checkbox — checked
+      // by default so a clean slate is the norm.
+      eraseAll: document.getElementById('fullErase')?.checked ?? false,
       compress: true,
       reportProgress: (fileIndex, written, fileTotal) => {
         const done = (before[fileIndex] || 0) + written;

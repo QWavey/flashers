@@ -240,7 +240,10 @@ async function runFlash() {
       flashSize: CFG.flashSize,
       flashMode: CFG.flashMode,
       flashFreq: CFG.flashFreq,
-      eraseAll: CFG.eraseAll,
+      // Watch flasher: honour the "Fully erase flash before writing" checkbox
+      // — overrides the CFG default (false). Checked = erase every sector
+      // first, wipes NVS + saved WiFi + stale silent_boot/bricked flags.
+      eraseAll: document.getElementById('fullErase')?.checked ?? CFG.eraseAll,
       compress: CFG.compress,
       reportProgress: (fileIndex, written, fileTotal) => {
         const done = (before[fileIndex] || 0) + written;

@@ -274,6 +274,7 @@
           <p class="readout"><b><span id="rdDone">0</span> / <span id="rdTotal">0</span> KB</b><span id="rdParts">0 / 0 parts</span><span class="ph" id="phase">ready</span></p>
           <dl class="mini"><div><dt>Image</dt><dd id="pickName">firmware</dd></div><div><dt>Chip</dt><dd id="pickChip">ESP32-S3</dd></div></dl>
           <label class="batchbar"><input type="checkbox" id="flashMany"> Flash multiple devices</label>
+          <label class="batchbar"><input type="checkbox" id="fullErase" checked> Fully erase flash before writing (wipes NVS &amp; saved WiFi/settings)</label>
           <p class="inline-err" id="flashErr" hidden></p>
           <p class="batchnote" id="batchNote" hidden></p>
           <div class="acts"><button class="btn solid hold" id="btnFlash" disabled><span class="hold-fill" aria-hidden="true"></span><span class="hold-label">Hold to flash</span></button>
@@ -285,9 +286,19 @@
           <p class="kicker done-k">Complete</p>
           <h1>Flashed.</h1>
           <p>The device has been reset and is running the new firmware. You can unplug it now.</p>
+          <details class="recovery">
+            <summary><b>Watch won't turn on?</b> — power-on recovery</summary>
+            <ol>
+              <li>Hold the <b>power</b> button (side, near USB-C) for at least <b>10 seconds</b> to force the AXP2101 off.</li>
+              <li>Plug USB-C back in. The watch should power on automatically.</li>
+              <li>If nothing happens, unplug USB-C, press the <b>power</b> button once, then hold it 2&#8202;s.</li>
+              <li>Still dark? Press both side buttons (BOOT and POWER) in short random combinations for a few seconds — this walks the PMU through its state machine until it latches on.</li>
+              <li>Repeat step 1 whenever the watch acts locked — the shutdown may not have completed cleanly.</li>
+            </ol>
+          </details>
           <div class="acts">
             <button class="btn ghost" data-go="2">Flash another</button>
-            <a class="btn ghost" href="https://github.com/QWavey/ESP-S3-Key-BadUSB" target="_blank" rel="noopener">Repo</a>
+            <a class="btn ghost" href="https://github.com/QWavey/ESP-Watch-BadUSB" target="_blank" rel="noopener">Repo</a>
           </div>
         </section>
       </div>
