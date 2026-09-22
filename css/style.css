@@ -85,6 +85,7 @@ a { color: inherit; }
   min-height: 300px;
 }
 .card .art svg { height: 230px; width: auto; max-width: 100%; display: block; }
+.card .art img.traced { height: 230px; width: auto; max-width: 100%; display: block; object-fit: contain; color: var(--white); }
 
 .card .body { padding: var(--s-5); display: grid; gap: var(--s-3); }
 .card .kicker {
@@ -159,6 +160,7 @@ a { color: inherit; }
   .grid { grid-template-columns: 1fr; }
   .card .art { min-height: 240px; }
   .card .art svg { height: 190px; }
+  .card .art img.traced { height: 190px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .card { animation: none; }

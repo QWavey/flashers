@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP32-P4 Hub Keylogger &mdash; WebFlasher</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .hero-fig{width:100%;height:auto;display:block;color:var(--stroke,#f5f5f7)}
+  .hero-fig .case,.hero-fig .chip,.hero-fig .edge{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+  .hero-fig .case{stroke-width:2.6}
+  .hero-fig .chip{stroke-width:2.0}
+  .hero-fig .edge{stroke-width:1.5}
+  .hero-fig .detail{fill:none;stroke:#8a8a8f;stroke-width:.9;stroke-linecap:round;stroke-linejoin:round}
+  .hero-fig .fine  {fill:none;stroke:#8a8a8f;stroke-width:.6;opacity:.85;stroke-linecap:round;stroke-linejoin:round}
+
+  .cue-halo{fill:none;stroke:var(--accent,#ff6a13);stroke-width:6;opacity:0;transition:opacity .35s ease}
+  .cue-halo.on{opacity:.9;animation:cuePulse 1.6s ease-in-out infinite}
+  @keyframes cuePulse{0%,100%{opacity:.4}50%{opacity:.95}}
+  .cue-label{font:600 22px/1 "IBM Plex Mono",ui-monospace,monospace;fill:var(--accent,#ff6a13);opacity:0;transition:opacity .35s ease;letter-spacing:.08em}
+  .cue-label.on{opacity:1}
+
+  /* Ultra-simple layout (this flasher intentionally does NOT reuse the
+     complex wizard chrome of the single-chip flasher-forge output — a two-chip
+     walk-through reads more clearly as a linear step list.) */
+  body{background:#000;color:#f5f5f7;font-family:"Archivo",system-ui,sans-serif;margin:0;min-height:100vh;line-height:1.55}
+  a{color:#8ecaff}
+  .page{max-width:960px;margin:0 auto;padding:40px 24px 80px;display:grid;gap:32px}
+  header h1{margin:0 0 4px;font-size:30px;font-weight:800;letter-spacing:-.02em}
+  header .sub{color:#a1a1a6;font-size:15px}
+  header .warn{background:rgba(255,69,58,.12);border:1px solid rgba(255,69,58,.4);border-radius:10px;padding:12px 16px;color:#ffb7b0;margin-top:14px;font-size:14px}
+  .backlink{display:inline-flex;align-items:center;gap:6px;color:#a1a1a6;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.06em;text-decoration:none;margin-bottom:12px}
+  .backlink:hover{color:#f5f5f7}
+  .figure-wrap{background:#0b0b0e;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:24px;position:relative;overflow:hidden}
+  .caption{font:500 12px "IBM Plex Mono",ui-monospace,monospace;color:#8a8a8f;letter-spacing:.06em;text-align:center;margin-top:12px}
+
+  .step{background:#0b0b0e;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:22px 24px;display:grid;grid-template-columns:44px 1fr;gap:18px;position:relative;transition:border-color .25s ease,box-shadow .25s ease}
+  .step[data-active="true"]{border-color:rgba(255,106,19,.55);box-shadow:0 0 0 3px rgba(255,106,19,.14)}
+  .step.done{border-color:rgba(48,209,88,.35)}
+  .stepno{width:44px;height:44px;border-radius:50%;background:#191919;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:"IBM Plex Mono",ui-monospace,monospace}
+  .step[data-active="true"] .stepno{background:#ff6a13;color:#000;border-color:#ff6a13}
+  .step.done .stepno{background:#30d158;color:#000;border-color:#30d158}
+  .step h2{margin:0 0 6px;font-size:20px;font-weight:700}
+  .step p{margin:0 0 10px;color:#d0d0d5;font-size:15px}
+  .step ul{margin:6px 0 0;padding-left:20px}
+  .step ul li{margin:4px 0}
+  .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;letter-spacing:.4px;text-transform:uppercase;background:rgba(255,255,255,.08);color:#a1a1a6;font-family:"IBM Plex Mono",ui-monospace,monospace}
+  .badge.hot{background:rgba(255,106,19,.18);color:#ffcda1}
+  kbd{background:#161616;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:1px 7px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px}
+
+  .actions{display:flex;gap:12px;align-items:center;margin-top:14px;flex-wrap:wrap}
+  button.primary,button.secondary{font:600 14px/1 "Archivo",sans-serif;padding:10px 18px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:transform .1s ease,filter .2s ease,opacity .2s ease}
+  button.primary{background:#f5f5f7;color:#000}
+  button.primary:hover{filter:brightness(.92)}
+  button.secondary{background:transparent;color:#f5f5f7;border-color:rgba(255,255,255,.2)}
+  button.secondary:hover{background:rgba(255,255,255,.06)}
+  button[disabled]{opacity:.45;cursor:not-allowed;filter:none}
+  .actions .status{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:#8a8a8f;letter-spacing:.05em}
+  .actions .status[data-tone="ok"]{color:#30d158}
+  .actions .status[data-tone="err"]{color:#ff453a}
+  .actions .status[data-tone="live"]{color:#ff6a13}
+
+  .progress{margin-top:14px;background:#191919;border-radius:6px;overflow:hidden;height:6px}
+  .progress > div{background:#ff6a13;height:100%;width:0;transition:width .18s ease-out}
+  .log{margin-top:12px;max-height:180px;overflow:auto;background:#050505;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;font:12px/1.55 ui-monospace,"IBM Plex Mono",monospace;color:#c0c0c5;white-space:pre-wrap;word-break:break-all;display:none}
+  .log.on{display:block}
+  .log .ts{color:#6a6a70}
+  .log .err{color:#ff453a}
+  .log .ok{color:#30d158}
+
+  .toggle{display:inline-flex;align-items:center;gap:8px;color:#a1a1a6;font-size:13px;cursor:pointer;user-select:none}
+  .toggle input{accent-color:#ff6a13}
+
+  footer{margin-top:12px;color:#8a8a8f;font-size:12px;text-align:center;font-family:"IBM Plex Mono",ui-monospace,monospace}
+  footer a{color:#a1a1a6}
+
+  @media (max-width:640px){
+    .step{grid-template-columns:36px 1fr;padding:18px 18px;gap:14px}
+    .stepno{width:36px;height:36px;font-size:14px}
+    header h1{font-size:24px}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <a class="backlink" href="https://qwavey.github.io/flashers/">&larr; All flashers</a>
+    <h1>ESP32-P4 Hub Keylogger &mdash; unified flasher</h1>
+    <div class="sub">Ports of QWavey&rsquo;s <a href="https://github.com/QWavey/esp32-p4-hub-keylogger">esp32-p4-hub-keylogger</a> for the Spotpear ESP32-P4-MINI-B-M-EXT (P4 + on-board C6). One page &mdash; flash both chips right from your browser.</div>
+    <div class="warn"><b>Order matters.</b> Flash the <b>P4 first</b>, then the <b>C6</b>. The U4 switch on the M-EXT baseboard multiplexes the USB port &mdash; the wrong combination will silently fail.</div>
+  </header>
+
+  <div class="figure-wrap">
+    <div id="figHost" class="hero-fig" aria-label="ESP32-P4-MINI board (traced)"></div>
+    <div class="caption">auto-traced from a photo &middot; 181 strokes &middot; live target highlighted below</div>
+  </div>
+
+  <!-- Step 1: intro -->
+  <section class="step" data-step="1">
+    <div class="stepno">1</div>
+    <div>
+      <h2>Requirements</h2>
+      <p>Chromium browser (Chrome, Edge, Opera, Brave, Arc), a USB-C data cable, and a Spotpear ESP32-P4-MINI-B-M-EXT (N32R32 variant so the 16&nbsp;MB MSC partition fits). Nothing is uploaded &mdash; images are served from this page and written straight to the chip in your browser.</p>
+    </div>
+  </section>
+
+  <!-- Step 2: prep P4 -->
+  <section class="step" data-step="2" data-chip="p4">
+    <div class="stepno">2</div>
+    <div>
+      <h2>Prepare the <span class="badge hot">P4</span></h2>
+      <p>Route the Type-C to the ESP32-P4&rsquo;s USB-Serial-JTAG and hold it in the ROM boot loader.</p>
+      <ul>
+        <li>Move the <b>U4 switch</b> to <b>position 0</b> (P4 side).</li>
+        <li>Hold <kbd>BOOT</kbd> on the P4-MINI, tap <kbd>RESET</kbd>, then release <kbd>BOOT</kbd>.</li>
+        <li>Your PC enumerates a new serial port &mdash; that&rsquo;s the P4 ROM loader.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Step 3: flash P4 -->
+  <section class="step" data-step="3" data-chip="p4" id="flashP4">
+    <div class="stepno">3</div>
+    <div>
+      <h2>Flash the P4 firmware <span class="badge">chip family: ESP32-P4</span></h2>
+      <p>Click <b>Connect &amp; flash P4</b> and pick the port that just appeared. About 15&nbsp;seconds. When it&rsquo;s done, tap <kbd>RESET</kbd> on the P4 (no BOOT this time).</p>
+      <div class="actions">
+        <button class="primary" data-flash="p4">Connect &amp; flash P4</button>
+        <label class="toggle"><input type="checkbox" data-log-toggle="p4"> show log</label>
+        <span class="status" data-status="p4">idle</span>
+      </div>
+      <div class="progress" data-progress="p4"><div></div></div>
+      <div class="log" data-log="p4"></div>
+    </div>
+  </section>
+
+  <!-- Step 4: prep C6 -->
+  <section class="step" data-step="4" data-chip="c6">
+    <div class="stepno">4</div>
+    <div>
+      <h2>Prepare the <span class="badge hot">C6</span></h2>
+      <p>Route the same Type-C to the on-board ESP32-C6-MINI instead, then hold it in ROM.</p>
+      <ul>
+        <li>Move the <b>U4 switch</b> to <b>position 1</b> (C6 side).</li>
+        <li>Hold <kbd>C6_BOOT</kbd> on the M-EXT board, tap <kbd>C6_RESET</kbd>, release <kbd>C6_BOOT</kbd>.</li>
+        <li>Another fresh serial port appears &mdash; the C6 in ROM.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Step 5: flash C6 -->
+  <section class="step" data-step="5" data-chip="c6" id="flashC6">
+    <div class="stepno">5</div>
+    <div>
+      <h2>Flash the C6 firmware <span class="badge">chip family: ESP32-C6</span></h2>
+      <p>Click <b>Connect &amp; flash C6</b> and pick the C6&rsquo;s new port. About 30&nbsp;seconds &mdash; the C6 image is bigger (2&nbsp;MB SPIFFS bundle with the full Hak5 language pack).</p>
+      <div class="actions">
+        <button class="primary" data-flash="c6">Connect &amp; flash C6</button>
+        <label class="toggle"><input type="checkbox" data-log-toggle="c6"> show log</label>
+        <span class="status" data-status="c6">idle</span>
+      </div>
+      <div class="progress" data-progress="c6"><div></div></div>
+      <div class="log" data-log="c6"></div>
+    </div>
+  </section>
+
+  <!-- Step 6: done -->
+  <section class="step" data-step="6">
+    <div class="stepno">6</div>
+    <div>
+      <h2>Connect</h2>
+      <p>Flip the U4 switch back to <b>0</b> (P4 side) and reset. The P4 is what the target PC sees over USB (HID + MSC composite). The C6 sits on-board and serves the Wi-Fi AP.</p>
+      <ul>
+        <li>Look for the Wi-Fi network <b>P4-KeyLogger</b> &mdash; password <b>changeme123</b>.</li>
+        <li>Open <a href="http://192.168.4.1">http://192.168.4.1</a> &mdash; that&rsquo;s the ported BadUSB UI.</li>
+        <li>The old keylog dashboard is still at <a href="http://192.168.4.1/klog">/klog</a>; the Keylog tab reads from the same live channel.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Source: <a href="https://github.com/QWavey/esp32-p4-hub-keylogger">esp32-p4-hub-keylogger</a>
+    &nbsp;&middot;&nbsp; Traced with <a href="https://github.com/QWavey/flasher-forge">flasher-forge</a>
+    &nbsp;&middot;&nbsp; Runs entirely in your browser
+  </footer>
+</div>
+
+<script type="module" src="js/flasher.js"></script>
+</body>
+</html>
