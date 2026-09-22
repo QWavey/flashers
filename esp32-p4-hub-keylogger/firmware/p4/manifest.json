@@ -1,6 +1,6 @@
 {
   "name": "ESP32-P4 KeyLogger \u2014 P4 firmware",
-  "version": "sizefix-1",
+  "version": "usbctl-1",
   "chip": "ESP32-P4",
   "flashSize": "keep",
   "parts": [
@@ -17,7 +17,7 @@
     {
       "path": "app.bin",
       "offset": 65536,
-      "size": 618208
+      "size": 618256
     }
   ]
 }
