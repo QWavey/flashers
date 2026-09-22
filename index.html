@@ -50,10 +50,13 @@
        constantly re-evaluates positions during scroll; we don't want
        any of that on this static filmstrip. */
     overflow-anchor: none;
-    /* Contain layout/paint at the body level too — cards' `contain`
-       property helps INSIDE each card, this stops paint escaping out
-       to the html element. */
-    contain: layout style paint;
+    /* NOTE: `contain: layout style paint` was tried here and reverted.
+       Per CSS spec, `contain: layout` on an element creates a new
+       containing block for its `position: fixed` descendants — which
+       broke both the mast (was scrolling with the cards) and the
+       scroll-hint arrow (was pinned inside a card mid-viewport
+       instead of at the right edge). The individual cards keep their
+       own `contain` — that's the win we actually need. */
   }
   body::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
