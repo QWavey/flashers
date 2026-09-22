@@ -1,6 +1,6 @@
 {
   "name": "ESP32-P4 KeyLogger \u2014 C6 firmware",
-  "version": "bug-hunt-1",
+  "version": "bug-hunt-2",
   "chip": "ESP32-C6",
   "flashSize": "keep",
   "parts": [
@@ -17,7 +17,7 @@
     {
       "path": "app.bin",
       "offset": 65536,
-      "size": 1015840
+      "size": 1018288
     },
     {
       "path": "storage.bin",
