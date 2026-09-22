@@ -902,3 +902,94 @@ body[data-state="ok"] .fx-port { opacity: 1; animation: fxseat 0.5s var(--e-appl
 .view .chk span { color: var(--gray-2); }
 .btn.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--line-2)); }
 .btn.danger:hover { border-color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Mobile wizard patch (added after user reported the setup wizard
+   collapsed on Android).
+
+   The stock mobile rules assumed a landscape-ish 860 px viewport and
+   crammed everything into a 720 px `max-height` box with `.views` as
+   the only scrollable region. On a portrait phone that reserves ~140 px
+   for chrome + spec table and leaves ~450 px for the wizard steps — the
+   checkboxes, hold-to-flash button and branch dropdown pile up and get
+   cropped or squeezed under a nested scrollbar.
+
+   Fix: let the page itself scroll on narrow viewports instead of
+   pinning the box to the viewport, hide the internal-scroll on
+   `.views`, expand the rail to fit content, and let the `.box` grow
+   with content. Also handle the very narrow (< 480 px) case with even
+   tighter typography and margins.
+   ─────────────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  html, body { overflow-x: hidden; }
+  .stage { height: auto; min-height: 100svh; padding: 16px; }
+  .box  {
+    max-height: none;                        /* let the box grow */
+    grid-template-rows: auto auto auto;      /* no fixed 1fr for the body */
+    max-width: 100%;
+    border-radius: 14px;
+  }
+  .box-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+  .slab {
+    grid-template-columns: 1fr;              /* stack spec below (no figure) */
+    grid-template-rows: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--line-1);
+    padding: 4px 0;
+  }
+  .spec {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    padding: 12px 16px;
+    gap: 6px 14px;
+  }
+  .spec > div { padding: 6px 0; border-top: 1px solid var(--line-1); }
+  .spec dt { font-size: 11px; }
+  .spec dd { font-size: 14px; }
+
+  .panel { grid-template-rows: auto auto; }
+  .rail {
+    padding: 12px 16px 10px; gap: 6px;
+    grid-auto-columns: minmax(0, 1fr);
+    overflow-x: auto;                        /* rail can side-scroll if many steps */
+    scrollbar-width: none;
+  }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail li b { display: inline; font-size: 12px; }   /* keep labels visible */
+
+  .views {
+    overflow: visible;                        /* page scrolls, not this box */
+    max-height: none;
+    padding: 4px 16px 20px;
+  }
+  .view {
+    padding: 20px 4px 8px;
+  }
+  .view h1 { font-size: clamp(24px, 6vw, 32px); margin-bottom: 12px; }
+  .view p  { font-size: 14.5px; line-height: 1.5; max-width: none; }
+
+  /* Big buttons + hold-to-flash need room. Wrap actions on their own line. */
+  .view .acts { flex-wrap: wrap; gap: 10px; }
+  .btn { font-size: 14px; padding: 12px 16px; }
+  .btn.hold { min-height: 52px; }
+
+  /* Log + files drawers slide over on desktop; on mobile give them a
+     safe max-height so they don't cover the whole screen. */
+  .drawer { max-height: 60vh; }
+}
+
+@media (max-width: 480px) {
+  .stage      { padding: 10px; gap: 10px; }
+  .brandline  { font-size: 14px; }
+  .box-top    { padding: 10px 14px; }
+  .box-bot    { padding: 8px 12px; }
+  .rail li b  { font-size: 11px; letter-spacing: 0.02em; }
+  .view       { padding: 16px 2px 4px; }
+  .view h1    { font-size: 22px; }
+  .view p     { font-size: 14px; }
+  .spec       { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .legal      { font-size: 11px; }
+}
