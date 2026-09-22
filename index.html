@@ -36,10 +36,14 @@
   body {
     overflow-x: auto; overflow-y: hidden;
     height: 100vh; height: 100svh;
-    /* Native smooth-scroll — makes mouse-wheel scroll not feel like a
-       teleport. Native implementation, no JS RAF loop that could get
-       stuck in a weird state (my previous accumulator did). */
-    scroll-behavior: smooth;
+    /* NO `scroll-behavior: smooth` here — it caused the "slower =
+       faster" bug. Reason: with smooth scroll on, `scrollLeft` returns
+       the mid-animation interpolated value, so when back-to-back wheel
+       events read scrollLeft to compute their next target they sample
+       a value that hasn't caught up yet, and each event effectively
+       overrides the previous instead of adding on top of it. JS below
+       handles the smoothing with an explicit target-tracked lerp. */
+    scroll-behavior: auto;
     scrollbar-width: none;      /* Firefox */
     -ms-overflow-style: none;   /* IE / old Edge */
     flex-direction: row; align-items: stretch;
@@ -826,15 +830,51 @@
   const sc = document.body;
   function getScrollX()    { return sc.scrollLeft || document.documentElement.scrollLeft || 0; }
   function getScrollMaxX() { return Math.max(sc.scrollWidth - sc.clientWidth, 0); }
+  // Target-tracked smooth scroll state. Declared here (top of the IIFE)
+  // so scrollByX / scrollToX below can rely on it, and so does the
+  // wheel handler defined further down.
+  let scrollTargetX = 0;
+  let scrollRunning = false;
+  const SCROLL_LERP = 0.22;
+
+  function tickScroll() {
+    const cur  = getScrollX();
+    const diff = scrollTargetX - cur;
+    if (Math.abs(diff) < 0.5) {
+      sc.scrollLeft = scrollTargetX;
+      document.documentElement.scrollLeft = scrollTargetX;
+      scrollRunning = false;
+      updateHintForPosition();
+      return;
+    }
+    const next = cur + diff * SCROLL_LERP;
+    sc.scrollLeft = next;
+    document.documentElement.scrollLeft = next;
+    updateHintForPosition();
+    requestAnimationFrame(tickScroll);
+  }
+  function startScrollIfIdle() {
+    if (!scrollRunning) {
+      scrollRunning = true;
+      requestAnimationFrame(tickScroll);
+    }
+  }
   function scrollByX(dx, smooth) {
-    if (smooth && sc.scrollBy) { sc.scrollBy({ left: dx, behavior: 'smooth' }); }
-    else { sc.scrollLeft += dx; }
-    document.documentElement.scrollLeft += dx;   // fallback, no-op if body owns scroll
+    if (!scrollRunning) scrollTargetX = getScrollX();
+    scrollTargetX = Math.max(0, Math.min(getScrollMaxX(), scrollTargetX + dx));
+    if (smooth) startScrollIfIdle();
+    else {
+      sc.scrollLeft = scrollTargetX;
+      document.documentElement.scrollLeft = scrollTargetX;
+    }
   }
   function scrollToX(x, smooth) {
-    if (smooth && sc.scrollTo) { sc.scrollTo({ left: x, behavior: 'smooth' }); }
-    else { sc.scrollLeft = x; }
-    document.documentElement.scrollLeft = x;
+    scrollTargetX = Math.max(0, Math.min(getScrollMaxX(), x));
+    if (smooth) startScrollIfIdle();
+    else {
+      sc.scrollLeft = scrollTargetX;
+      document.documentElement.scrollLeft = scrollTargetX;
+    }
   }
 
   // ------------------------- 1) repo chips ----------------------------
@@ -977,17 +1017,27 @@
   requestAnimationFrame(updateHintForPosition);
 
   // ------------------------- 4) wheel → horizontal --------------------
-  // Simplest possible mapping: translate vertical wheel delta into a
-  // horizontal scroll increment on the body. CSS `scroll-behavior:
-  // smooth` on body makes the browser interpolate to that target with
-  // a proper native easing — no JS RAF accumulator needed (the previous
-  // one silently failed on some mouse setups). Touchpad users still
-  // get their fast pixel-precise horizontal via the deltaX passthrough.
+  // Target-tracked lerp: every wheel event ADDS its delta to a target
+  // position, and a RAF loop moves the actual scrollLeft toward the
+  // target. Because `targetX` is decoupled from the current scroll
+  // position, fast-fired wheel events accumulate correctly — 10 quick
+  // notches always take you 10 * dy pixels, regardless of whether the
+  // interpolation animation for the previous events finished.
+  //
+  // The previous implementation read `sc.scrollLeft` on every wheel
+  // event to compute a fresh target — combined with CSS smooth scroll,
+  // that meant fast events sampled a lagging value and the sum came
+  // out SMALLER than the sum of the deltas. That's the "faster =
+  // slower" bug the user reported.
   function pxDelta(e) {
     if (e.deltaMode === 1) return e.deltaY * 40;                    // line
     if (e.deltaMode === 2) return e.deltaY * window.innerHeight;    // page
     return e.deltaY;                                                // pixel
   }
+  // Prime the target on first paint so the first wheel event resumes
+  // from wherever the browser thinks the scroll is.
+  scrollTargetX = getScrollX();
+
   window.addEventListener('wheel', (e) => {
     if (mq.matches) return;
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;   // native horizontal — passthrough
@@ -995,15 +1045,19 @@
     const dy = pxDelta(e);
     if (dy === 0) return;
     e.preventDefault();
-    // Write to both — Chromium picks body, Firefox picks documentElement
-    // (they disagree about who's the scroll owner even after our
-    // overflow-only-on-body setup).
-    const cur    = sc.scrollLeft || document.documentElement.scrollLeft || 0;
-    const target = Math.max(0, Math.min(getScrollMaxX(), cur + dy));
-    sc.scrollLeft = target;
-    document.documentElement.scrollLeft = target;
-    updateHintForPosition();
+    // If the RAF loop finished, rebase the target on the browser's
+    // true scrollLeft so wheel resumes from where the page actually is.
+    if (!scrollRunning) scrollTargetX = getScrollX();
+    scrollTargetX = Math.max(0, Math.min(getScrollMaxX(), scrollTargetX + dy));
+    startScrollIfIdle();
   }, { passive: false });
+
+  // Non-wheel scroll (keyboard, click-hint, touchscreen drag) updates
+  // targetX so the next wheel event doesn't yank the page to a stale
+  // target.
+  function resyncTarget() { if (!scrollRunning) scrollTargetX = getScrollX(); }
+  document.body.addEventListener('scroll', resyncTarget, { passive: true });
+  window.addEventListener('scroll', resyncTarget, { passive: true });
 
   // ------------------------- 5) keyboard nav --------------------------
   window.addEventListener('keydown', (e) => {
