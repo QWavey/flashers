@@ -36,18 +36,24 @@
   body {
     overflow-x: auto; overflow-y: hidden;
     height: 100vh; height: 100svh;
-    /* NO `scroll-behavior: smooth` here — it caused the "slower =
-       faster" bug. Reason: with smooth scroll on, `scrollLeft` returns
-       the mid-animation interpolated value, so when back-to-back wheel
-       events read scrollLeft to compute their next target they sample
-       a value that hasn't caught up yet, and each event effectively
-       overrides the previous instead of adding on top of it. JS below
-       handles the smoothing with an explicit target-tracked lerp. */
     scroll-behavior: auto;
-    scrollbar-width: none;      /* Firefox */
-    -ms-overflow-style: none;   /* IE / old Edge */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     flex-direction: row; align-items: stretch;
     padding: 0; gap: 0;
+    /* Hint the browser that scroll-position keeps changing so it can
+       promote the scroll container to a compositor-thread layer. Scroll
+       updates then don't have to hit the main thread every frame. */
+    will-change: scroll-position;
+    /* Prevent scroll anchoring — the browser's default behaviour of
+       keeping a "reference element" in view when layout shifts. It
+       constantly re-evaluates positions during scroll; we don't want
+       any of that on this static filmstrip. */
+    overflow-anchor: none;
+    /* Contain layout/paint at the body level too — cards' `contain`
+       property helps INSIDE each card, this stops paint escaping out
+       to the html element. */
+    contain: layout style paint;
   }
   body::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
@@ -114,13 +120,12 @@
        Dock loop writes transform on cards every frame — without
        containment each write forces the grid to re-flow. */
     contain: layout style paint;
-    /* Off-screen cards during horizontal scroll: skip rendering. The
-       browser only paints cards near or in the viewport; scrolling
-       becomes cheap because there's nothing to paint for the cards
-       that are still off to the right. Needs an intrinsic size hint
-       so the layout is stable BEFORE the browser renders them. */
-    content-visibility: auto;
-    contain-intrinsic-size: min(440px, 80vw) min(620px, 80vh);
+    /* NOTE: `content-visibility: auto` was tried and reverted. On a
+       five-card row the browser's per-frame intersection check to
+       decide whether to render each card ended up costing more than
+       the paint it saved, and it caused a visible re-render "flash"
+       when a card entered the viewport. Content is small enough that
+       painting all 5 is faster than checking all 5. */
     /* Cancel the .card { animation: cardIn } rule from the shared
        css/style.css. That animation's final keyframe has
        `transform: none` with fill-mode:both, which was overriding the
@@ -128,18 +133,30 @@
     animation: none !important;
     /* JS writes element.style.transform every frame; do NOT list
        transform in the CSS transition and do NOT set it from a keyframe
-       animation. The transition is for hover polish only. */
+       animation. Transitions are for hover polish only.
+       `border-color` was removed from the list — border transitions
+       repaint the entire border rect on every intermediate frame,
+       which is expensive during scroll. Border stays a fixed subtle
+       color; hover polish comes from background + inset shadow. */
     transition:
       box-shadow 320ms cubic-bezier(0.4, 0, 0.2, 1),
-      filter     320ms cubic-bezier(0.4, 0, 0.2, 1),
-      border-color 220ms var(--e-out),
-      background   220ms var(--e-out);
+      background 220ms var(--e-out);
     will-change: transform;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     outline: none;
   }
-  .card .art { flex: 1; min-height: 0; overflow: hidden; }
+  .card .art {
+    flex: 1; min-height: 0; overflow: hidden;
+    /* The traced SVG images inside are 100+ KB of vector paths. Wrap
+       them in a paint-contained box so the compositor can treat the
+       whole art region as one bitmap and cache it — scroll then
+       translates the cache instead of re-rasterising the SVG. */
+    contain: strict;
+    contain-intrinsic-size: 100% 100%;
+    /* Nudge the browser into promoting this to its own layer. */
+    transform: translateZ(0);
+  }
   .card:focus { outline: none; }
   .card:focus-visible {
     outline: 2px solid rgba(255, 255, 255, 0.5);
@@ -1008,7 +1025,7 @@
   const CARD_MAX_SCALE = 1.10;     // scale while pointer is inside
   const CARD_LERP      = 0.22;     // per-frame catch-up factor
   const cardStates = Array.from(document.querySelectorAll('.card')).map(el => ({
-    el, current: 1, target: 1,
+    el, current: 1, target: 1, wasTop: false,
     // Cached hit-test box in DOCUMENT coordinates (independent of
     // scrollLeft). Populated once at load and refreshed only on resize
     // — never during scroll — so the fisheye hot loop never has to
@@ -1089,13 +1106,23 @@
       if (Math.abs(diff) > 0.0005) {
         s.current += diff * CARD_LERP;
         s.el.style.setProperty('transform', `scale(${s.current.toFixed(4)})`, 'important');
-        s.el.style.zIndex = s.current > 1.02 ? '3' : '1';
+        // Only write zIndex when the "on top" state actually flips.
+        // Two writes → one style invalidation instead of two.
+        const shouldBeTop = s.current > 1.02;
+        if (shouldBeTop !== s.wasTop) {
+          s.el.style.zIndex = shouldBeTop ? '3' : '1';
+          s.wasTop = shouldBeTop;
+        }
         anyAnimating = true;
       } else if (s.current !== s.target) {
         // Snap to the final value to stop the loop cleanly.
         s.current = s.target;
         s.el.style.setProperty('transform', `scale(${s.target.toFixed(4)})`, 'important');
-        s.el.style.zIndex = s.target > 1.02 ? '3' : '1';
+        const shouldBeTop = s.target > 1.02;
+        if (shouldBeTop !== s.wasTop) {
+          s.el.style.zIndex = shouldBeTop ? '3' : '1';
+          s.wasTop = shouldBeTop;
+        }
       }
     }
     // Spotlight is position:fixed so it needs VIEWPORT coords, not doc.
