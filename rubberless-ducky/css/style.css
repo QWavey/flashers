@@ -1071,3 +1071,14 @@ a, button, label, select, input, .btn, .railbtn, .tabbtn, [role="button"] {
   .spec dd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .spec > div { padding: 8px 10px; }
 }
+
+/* Header fit: on a phone the brandline (e.g. "ESP32-P4-HUB . KEYLOGGER")
+   is longer than the space left of the status pill and was overlapping
+   it. Let box-lead take the row and the brandline wrap under the back
+   button; keep the status pinned top-right, not overlapping. */
+@media (max-width: 720px) {
+  .box-top  { align-items: flex-start; }
+  .box-lead { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; align-items: baseline; }
+  .brandline { min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+  .status   { flex: none; align-self: flex-start; }
+}
