@@ -154,9 +154,15 @@
     /* The traced SVG images inside are 100+ KB of vector paths. Wrap
        them in a paint-contained box so the compositor can treat the
        whole art region as one bitmap and cache it — scroll then
-       translates the cache instead of re-rasterising the SVG. */
-    contain: strict;
-    contain-intrinsic-size: 100% 100%;
+       translates the cache instead of re-rasterising the SVG.
+       NOTE: `contain: strict` was tried here and collapsed the art
+       box to zero on mobile — `size` containment plus
+       `contain-intrinsic-size: 100% 100%` (percentages don't work
+       there, silently fell back to 0×0) meant the browser reserved
+       no space at all and the traced figure showed as a thin line.
+       `layout paint style` is safe — no size containment, so the
+       image sizes to its natural aspect and gets its own layer. */
+    contain: layout paint style;
     /* Nudge the browser into promoting this to its own layer. */
     transform: translateZ(0);
   }
@@ -313,14 +319,54 @@
     body { overflow-x: hidden; overflow-y: auto; height: auto;
            scrollbar-width: auto; -ms-overflow-style: auto; }
     body::-webkit-scrollbar { display: initial; width: 8px; height: 8px; }
-    body { flex-direction: column; padding: var(--s-6) var(--s-5); }
-    .mast { position: static; width: 100%; height: auto; padding: 0 0 24px; background: none; text-align: center; }
-    .mast .mast-github { align-self: center; }
-    .wrap { flex-direction: column; padding: 0; gap: var(--s-6); min-height: 0; perspective: none; }
-    .grid { flex-direction: column; gap: 20px; }
-    .card { width: 100%; height: auto; --rx: 0deg !important; --ry: 0deg !important; --lift: 0 !important; }
-    .card:hover { transform: none; }
+    body { flex-direction: column; padding: 32px 20px 40px; align-items: stretch; }
+
+    /* Mast: not fixed on mobile, no gradient. Tight type so the intro
+       block doesn't push the first card past a full screen height. */
+    .mast {
+      position: static; width: 100%; height: auto; max-width: none;
+      padding: 0 0 20px; background: none; text-align: left;
+      display: block;
+    }
+    .mast h1     { font-size: clamp(40px, 12vw, 60px); line-height: 1; margin: 6px 0 12px; }
+    .mast p      { font-size: 15px; line-height: 1.45; margin: 0 0 16px; max-width: 40ch; }
+    .mast .eyebrow { margin: 0 0 6px; }
+    .mast .mast-github { align-self: flex-start; display: inline-block; }
+
+    /* Wrap: vertical stack under the mast. */
+    .wrap {
+      flex-direction: column; padding: 0; gap: 20px;
+      min-height: 0; perspective: none; width: 100%; align-items: stretch;
+    }
+    .grid { flex-direction: column; gap: 20px; width: 100%; }
+
+    /* Card: fill screen width. Explicit two-row layout: figure on top
+       (fixed-ish height so the art is actually visible — the desktop
+       min(620px, 80vh) heights collapsed the SVG to a sliver on a
+       narrow portrait viewport), body below. */
+    .card {
+      width: 100%; height: auto; max-width: 100%;
+      display: grid; grid-template-rows: 220px auto;
+      --rx: 0deg !important; --ry: 0deg !important; --lift: 0 !important;
+    }
+    .card:hover { transform: none; scale: 1; }
+
+    .card .art {
+      flex: none; height: 220px; min-height: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    /* Make the traced img fill the art box with letterboxing, no crop. */
+    .card .art img, .card .art svg {
+      max-width: 100%; max-height: 100%; width: auto; height: auto;
+      object-fit: contain;
+    }
+
+    .card .body { padding: 18px 20px 22px; }
+    .card-repo { top: 8px; right: 8px; padding: 4px 8px 4px 10px; font-size: 10px; }
+
     .scroll-hint { display: none; }
+    .cursor-light { display: none; }
   }
 </style>
 <script defer src="./js/traced-draw.js?v=2"></script>
