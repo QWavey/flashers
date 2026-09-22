@@ -200,6 +200,13 @@
     backface-visibility: hidden;
   }
   .cursor-light.on { opacity: 1; }
+  /* The spotlight is fixed-position but cards slide under it during
+     scroll, so the browser had to re-composite the semi-transparent
+     radial overlay against the moving content on every frame. Hiding
+     it during active scroll gets rid of that per-frame composite
+     cost — the user won't see it flicker because the fade uses the
+     existing opacity transition (240 ms). */
+  body.scrolling .cursor-light { opacity: 0; }
   /* (Removed the per-card ::after sheen and the cardFloat keyframes.
      The global .cursor-light spotlight above supplies the highlight,
      and the JS Dock fisheye drives the scale — the ::after and the
@@ -306,7 +313,7 @@
     <h1>Flashers</h1>
     <p>Flash open firmware onto the boards straight from your browser, over USB.
       No toolchain, no command line. Pick a device.</p>
-    <a class="mast-github" href="https://github.com/QWavey" target="_blank" rel="noopener">GitHub &#8599;</a>
+    <a class="mast-github" href="https://github.com/QWavey/flashers" target="_blank" rel="noopener">GitHub &#8599;</a>
   </header>
 
   <main class="grid">
