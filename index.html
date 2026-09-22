@@ -948,10 +948,33 @@
   const CARD_MAX_SCALE = 1.10;     // scale while pointer is inside
   const CARD_LERP      = 0.22;     // per-frame catch-up factor
   const cardStates = Array.from(document.querySelectorAll('.card')).map(el => ({
-    el, current: 1, target: 1, rect: null,
+    el, current: 1, target: 1,
+    // Cached hit-test box in DOCUMENT coordinates (independent of
+    // scrollLeft). Populated once at load and refreshed only on resize
+    // — never during scroll — so the fisheye hot loop never has to
+    // call getBoundingClientRect and never forces layout.
+    docLeft: 0, docTop: 0, docRight: 0, docBottom: 0,
   }));
   let mouseX = 0, mouseY = 0, mouseIn = false;
-  let lastMX = 0, lastMY = 0, lastMT = 0, velocity = 0;
+  function refreshCardRects() {
+    const scLeft = sc.scrollLeft;
+    for (const s of cardStates) {
+      const r = s.el.getBoundingClientRect();
+      // Convert viewport rect → document rect by adding scrollLeft.
+      // These document coords are stable across scroll — only viewport
+      // resize can invalidate them.
+      s.docLeft   = r.left + scLeft;
+      s.docTop    = r.top;
+      s.docRight  = r.right + scLeft;
+      s.docBottom = r.bottom;
+    }
+  }
+  // First pass — needs the layout to be built.
+  requestAnimationFrame(refreshCardRects);
+  window.addEventListener('resize', refreshCardRects);
+  // If cards get scaled (fisheye active), their visual rect changes.
+  // Refresh AFTER the pointer settles rather than in the hot loop.
+  document.addEventListener('pointerdown', refreshCardRects, { passive: true });
 
   // Global cursor spotlight — no CSS transition on transform, so it
   // stays glued to the pointer. Position is applied in the same RAF
@@ -982,13 +1005,20 @@
 
   function tickDock() {
     // Read the cursor position ONCE per frame into locals — no repeated
-    // property reads in the hot loop below.
-    const mx = mouseX, my = mouseY, in_ = mouseIn;
+    // property reads in the hot loop below. Also read scrollLeft ONCE
+    // and translate the cursor into DOCUMENT coordinates so the hit
+    // test can use the cached document-space rects (no
+    // getBoundingClientRect calls in this loop, so no forced layout
+    // during scroll).
+    const in_ = mouseIn;
+    const scLeft = sc.scrollLeft;
+    const mxDoc = mouseX + scLeft;
+    const my    = mouseY;
     let anyAnimating = false;
     for (const s of cardStates) {
       if (in_) {
-        const r = s.el.getBoundingClientRect();
-        s.target = (mx >= r.left && mx <= r.right && my >= r.top && my <= r.bottom)
+        s.target = (mxDoc >= s.docLeft && mxDoc <= s.docRight &&
+                    my    >= s.docTop  && my    <= s.docBottom)
           ? CARD_MAX_SCALE : 1;
       } else {
         s.target = 1;
@@ -1008,8 +1038,8 @@
         s.el.style.zIndex = s.target > 1.02 ? '3' : '1';
       }
     }
-    // Spotlight tracks the pointer only while it's visible (mouseIn).
-    if (in_) light.style.transform = `translate3d(${mx}px, ${my}px, 0)`;
+    // Spotlight is position:fixed so it needs VIEWPORT coords, not doc.
+    if (in_) light.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
     // Self-stop when everything is at rest AND cursor isn't over the
     // page. On next pointermove startDockIfIdle re-arms us.
     if (anyAnimating || in_) requestAnimationFrame(tickDock);
