@@ -1,224 +1,334 @@
-// ESP32-P4 Hub Keylogger — unified WebFlasher (P4 + C6 in one page).
-// Uses esptool-js (the JS port of esptool) over WebSerial. Each of the two
-// "Connect & flash <chip>" buttons opens its own port, verifies the chip
-// family matches, writes that chip's manifest.json image set, hard-resets.
+// ESP32-P4 Hub Keylogger — unified WebFlasher (P4 + C6 in one page)
+// Runs the same wizard chrome as the other flashers-hub flashers, but with
+// TWO chip targets: the ESP32-P4 side (bootloader + partitions + app) and
+// the on-board ESP32-C6 side (bootloader + partitions + app + storage).
+// Each has its own Connect + Hold-to-Flash button, its own progress cells,
+// its own manifest under firmware/<chip>/. The wizard walks users through
+// them in sequence: Brief → Boot P4 → Connect P4 → Flash P4 → Boot C6 →
+// Connect C6 → Flash C6 → Done.
+//
+// Each Connect button verifies that the port's detected chip family matches
+// the current step (so left-switch-on-P4 while trying to flash the C6 is a
+// clear error, not a bricked chip).
 
 import { ESPLoader, Transport } from '../vendor/esptool-bundle.js';
 
-const $  = sel => document.querySelector(sel);
+const $  = id => document.getElementById(id);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-// -----------------------------------------------------------------------
-// Traced hero figure — inline the SVG so we can layer live cue callouts
-// (a pulsing halo around the chip that's being flashed right now) on top.
-// -----------------------------------------------------------------------
-(async function loadHero() {
-  const host = document.getElementById('figHost');
-  if (!host) return;
-  try {
-    const [svgText, anchorsResp] = await Promise.all([
-      fetch('assets/figure.svg', { cache: 'no-store' }).then(r => r.text()),
-      fetch('assets/figure.anchors.json', { cache: 'no-store' }).then(r => r.json()),
-    ]);
-    host.innerHTML = svgText;
-    const svg = host.querySelector('svg');
-    if (!svg) return;
-    // remove any width/height so it fluid-fits, keep the tight viewBox
-    svg.removeAttribute('width'); svg.removeAttribute('height');
-    // add the cue overlay group
-    const NS = 'http://www.w3.org/2000/svg';
-    const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'cues');
-    const anchors = anchorsResp.labels || {};
-    const cueP4 = mkHalo(anchors['P4'] || anchors['ESP32-P4'],      100, 'p4');
-    const cueC6 = mkHalo(anchors['C6'] || anchors['ESP32-C6-MINI'],  80, 'c6');
-    const lblP4 = mkLabel(anchors['P4'] || anchors['ESP32-P4'],      'P4', 100, 'p4');
-    const lblC6 = mkLabel(anchors['C6'] || anchors['ESP32-C6-MINI'], 'C6',  80, 'c6');
-    for (const el of [cueP4, cueC6, lblP4, lblC6]) if (el) g.appendChild(el);
-    svg.appendChild(g);
-
-    function mkHalo(pt, r, kind) {
-      if (!pt) return null;
-      const c = document.createElementNS(NS, 'circle');
-      c.setAttribute('class', 'cue-halo');
-      c.setAttribute('cx', pt[0]); c.setAttribute('cy', pt[1]); c.setAttribute('r', r);
-      c.dataset.chip = kind;
-      return c;
-    }
-    function mkLabel(pt, text, r, kind) {
-      if (!pt) return null;
-      const t = document.createElementNS(NS, 'text');
-      t.setAttribute('class', 'cue-label');
-      t.setAttribute('x', pt[0]); t.setAttribute('y', pt[1] - r - 14);
-      t.setAttribute('text-anchor', 'middle');
-      t.textContent = 'now flashing: ' + text;
-      t.dataset.chip = kind;
-      return t;
-    }
-  } catch (e) {
-    host.innerHTML = '<div style="color:#8a8a8f;padding:32px;text-align:center;font-family:IBM Plex Mono,monospace;font-size:12px">figure unavailable</div>';
-    console.warn('hero:', e);
-  }
-})();
-
-// -----------------------------------------------------------------------
-// Wizard state — mark the "live" step + highlight the matching chip cue.
-// -----------------------------------------------------------------------
-function setActiveStep(n) {
-  $$('.step').forEach(s => {
-    const i = +s.dataset.step;
-    s.dataset.active = (i === n);
-    s.classList.toggle('done', i < n);
+// ---- Log ------------------------------------------------------------------
+const MAX_LOG_LINES = 500;
+const pad2 = n => String(n).padStart(2, '0');
+function tsNow() { const d = new Date(); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; }
+function log(msg, cls) {
+  const el = $('consoleOut'); if (!el) return;
+  String(msg).split('\n').forEach(part => {
+    if (part === '') return;
+    const line = document.createElement('div');
+    const t = document.createElement('span'); t.className = 'ts'; t.textContent = `[${tsNow()}] `;
+    const b = document.createElement('span'); if (cls) b.className = cls; b.textContent = part;
+    line.appendChild(t); line.appendChild(b); el.appendChild(line);
   });
-  // cues on the traced figure
-  const chip = ($('.step[data-active="true"]')?.dataset.chip) || null;
-  $$('.cue-halo, .cue-label').forEach(el => el.classList.toggle('on', chip && el.dataset.chip === chip));
-}
-setActiveStep(2); // start users on "prepare P4"
-
-// -----------------------------------------------------------------------
-// Small helpers
-// -----------------------------------------------------------------------
-function pad2(n){return String(n).padStart(2,'0')}
-function ts(){const d=new Date();return `[${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}] `}
-
-function log(chip, msg, cls) {
-  const el = document.querySelector(`[data-log="${chip}"]`);
-  if (!el) return;
-  String(msg).split('\n').forEach(line => {
-    if (!line) return;
-    const row = document.createElement('div');
-    const t = document.createElement('span'); t.className='ts'; t.textContent = ts();
-    const b = document.createElement('span'); if (cls) b.className = cls; b.textContent = line;
-    row.append(t, b); el.appendChild(row);
-  });
+  while (el.childElementCount > MAX_LOG_LINES) el.removeChild(el.firstElementChild);
   el.scrollTop = el.scrollHeight;
-  const box = document.querySelector(`[data-log-toggle="${chip}"]`);
-  if (box && !box.checked) { box.checked = true; el.classList.add('on'); }
+  if (cls === 'err') openDrawer('console');
+}
+const espTerminal = {
+  clean() {},
+  writeLine(data) { log(String(data)); },
+  write(data) { const t = String(data).trim(); if (t) log(t); },
+};
+
+// ---- Drawers --------------------------------------------------------------
+const DRAWERS = { console: 'btnConsole', filesDrawer: 'btnFiles' };
+let drawerOpener = null;
+function openDrawer(id, moveFocus) {
+  const wasOpen = Object.keys(DRAWERS).some(d => $(d).classList.contains('is-open'));
+  Object.keys(DRAWERS).forEach(d => {
+    const el = $(d), btn = $(DRAWERS[d]), on = d === id;
+    el.classList.toggle('is-open', on); el.inert = !on;
+    if (btn) btn.setAttribute('aria-expanded', String(on));
+  });
+  if (id === 'console') { const out = $('consoleOut'); out.scrollTop = out.scrollHeight; }
+  if (id) {
+    if (!moveFocus) return;
+    if (!wasOpen) drawerOpener = document.activeElement;
+    const close = $(id).querySelector('.x'); if (close) close.focus({ preventScroll: true });
+  } else if (wasOpen && drawerOpener && document.contains(drawerOpener)) {
+    drawerOpener.focus({ preventScroll: true }); drawerOpener = null;
+  }
+}
+function closeDrawers() { openDrawer(null); }
+Object.keys(DRAWERS).forEach(d => $(DRAWERS[d]).addEventListener('click', () =>
+  $(d).classList.contains('is-open') ? closeDrawers() : openDrawer(d, true)));
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeDrawers));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawers(); });
+
+// ---- Wizard ---------------------------------------------------------------
+const LAST_STEP = 7; // the "Done" view at data-step="7"
+let step = 0;
+const views = $$('.view');
+const rail  = $$('#rail li');
+
+function syncRail(n) {
+  rail.forEach(li => {
+    const i = +li.dataset.step;
+    const current = i === n && n < LAST_STEP;
+    li.classList.toggle('on', current);
+    li.classList.toggle('done', i < n);
+    let fill; if (i < n) fill = 100; else if (current) fill = Math.round((n + 1) / rail.length * 100); else fill = 0;
+    li.style.setProperty('--fill', fill);
+    if (current) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    const btn = li.querySelector('.railbtn'); if (btn) btn.disabled = i >= n;
+  });
+}
+function goTo(n) {
+  if (n === step) return;
+  const from = views.find(v => +v.dataset.step === step);
+  const to   = views.find(v => +v.dataset.step === n);
+  if (!to) return;
+  if (from) { from.classList.remove('is-on'); from.classList.add('is-out'); setTimeout(() => from.classList.remove('is-out'), 320); }
+  to.classList.add('is-on');
+  step = n; document.body.dataset.step = String(n); syncRail(n);
+  const h = to.querySelector('h1'); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+}
+document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => goTo(+b.dataset.go)));
+rail.forEach(li => { const btn = li.querySelector('.railbtn'); if (btn) btn.addEventListener('click', () => { if (li.classList.contains('done')) goTo(+li.dataset.step); }); });
+
+// ---- Page-map progress ----------------------------------------------------
+// One page-map per chip (each has its own pagemap element).
+const MAP_MAX_CELLS = 96;
+const mapCellsByChip = { p4: [], c6: [] };
+
+function buildPageMap(chip, units) {
+  const wrap = $('pagemap' + chip.toUpperCase()); if (!wrap) return;
+  const n = Math.max(1, Math.min(units, MAP_MAX_CELLS));
+  wrap.textContent = ''; mapCellsByChip[chip] = [];
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('i'); c.style.setProperty('--i', i);
+    wrap.appendChild(c); mapCellsByChip[chip].push(c);
+  }
+  wrap.classList.remove('is-done', 'is-error', 'is-erasing');
+  wrap.setAttribute('aria-valuenow', '0');
+}
+function paintProgress(chip, done, total) {
+  const wrap = $('pagemap' + chip.toUpperCase());
+  const cells = mapCellsByChip[chip] || [];
+  const upto = Math.round(cells.length * done / (total || 1));
+  for (let i = 0; i < cells.length; i++) {
+    cells[i].classList.toggle('on',   i <  upto);
+    cells[i].classList.toggle('next', i === upto);
+  }
+  const pct = Math.round(100 * done / (total || 1));
+  if (wrap) wrap.setAttribute('aria-valuenow', String(pct));
+  const dEl = $('rdDone' + chip.toUpperCase()), tEl = $('rdTotal' + chip.toUpperCase());
+  if (dEl) dEl.textContent = Math.round(done / 1024);
+  if (tEl) tEl.textContent = Math.round(total / 1024);
+}
+function mapState(chip, state) {
+  const wrap = $('pagemap' + chip.toUpperCase()); if (!wrap) return;
+  wrap.classList.toggle('is-erasing', state === 'erasing');
+  wrap.classList.toggle('is-done',    state === 'done');
+  wrap.classList.toggle('is-error',   state === 'error');
+  if (state) mapCellsByChip[chip].forEach(c => c.classList.remove('next'));
+  if (state === 'error') {
+    const next = mapCellsByChip[chip].find(c => !c.classList.contains('on'));
+    if (next) next.classList.add('fail');
+  }
+}
+function setPhase(chip, text) {
+  const e = $('phase' + chip.toUpperCase()); if (e) e.textContent = text;
+  const f = $('footStat'); if (f) f.textContent = `${chip.toUpperCase()}: ${text}`;
+}
+function setStatus(text, state) {
+  const l = $('statusText'), w = $('status');
+  if (l) l.textContent = text; if (w) w.dataset.state = state || 'idle';
+  document.body.dataset.state = state || 'idle';
+}
+function showFlashError(chip, msg) {
+  const el = $('flashErr' + chip.toUpperCase()); if (!el) return;
+  el.hidden = !msg; el.textContent = msg || '';
 }
 
-function setStatus(chip, text, tone) {
-  const el = document.querySelector(`[data-status="${chip}"]`);
-  if (!el) return;
-  el.textContent = text;
-  el.dataset.tone = tone || '';
-}
-function setProgress(chip, done, total) {
-  const bar = document.querySelector(`[data-progress="${chip}"] > div`);
-  if (!bar) return;
-  const p = total ? Math.max(0, Math.min(1, done / total)) : 0;
-  bar.style.width = (p * 100).toFixed(1) + '%';
-}
-function bufToBinary(buf){
-  const bytes = new Uint8Array(buf); const CHUNK = 0x8000; let out = '';
+// ---- Image loading --------------------------------------------------------
+function bufToBinaryString(buf) {
+  const bytes = new Uint8Array(buf);
+  let out = '';
+  const CHUNK = 0x8000;
   for (let i = 0; i < bytes.length; i += CHUNK) out += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
   return out;
 }
-async function loadImages(chip) {
-  const base = `firmware/${chip}/`;
-  const man = await (await fetch(base + 'manifest.json', { cache: 'no-store' })).json();
-  // Accept both flasher-forge's flat manifest ({chip, parts:[...]}) and the
-  // classic esp-web-tools shape ({builds:[{chipFamily, parts:[...]}]}).
-  const built = (man.builds && man.builds[0]) || null;
-  const partList = (built && built.parts) || man.parts || [];
-  const chipFamily = (built && built.chipFamily) || man.chip || '';
+async function fetchPart(base, path) {
+  const r = await fetch(base + path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`${base + path}: HTTP ${r.status}`);
+  return r.arrayBuffer();
+}
+async function loadManifestImages(chip) {
+  const base = `./firmware/${chip}/`;
+  const r = await fetch(base + 'manifest.json', { cache: 'no-store' });
+  if (!r.ok) throw new Error(`firmware/${chip}/manifest.json: HTTP ${r.status}`);
+  const man = await r.json();
   const parts = [];
-  for (const p of partList) {
-    const buf = await (await fetch(base + p.path, { cache: 'no-store' })).arrayBuffer();
-    parts.push({ address: p.offset, data: bufToBinary(buf), bytes: buf.byteLength, path: p.path });
-    log(chip, `image ${p.path} ${buf.byteLength} B @ 0x${p.offset.toString(16)}`);
+  for (const p of man.parts) {
+    const buf = await fetchPart(base, p.path);
+    parts.push({ data: bufToBinaryString(buf), address: p.offset, bytes: buf.byteLength });
+    log(`${chip}/${p.path}: ${buf.byteLength} B @ 0x${p.offset.toString(16)}`);
   }
-  return { chipFamily, parts };
+  const pn = $('pickName' + chip.toUpperCase()); if (pn) pn.textContent = `firmware/${chip} · v${man.version || '?'}`;
+  return { parts, chip: man.chip || '' };
 }
 
-// One captive esptool session per chip (never share transports across chips).
-const sessions = { p4: null, c6: null };
+// ---- Per-chip session (WebSerial + esptool) -------------------------------
+// The two sessions are fully independent — connecting to the P4 does not
+// touch the C6 state and vice versa. writeFlash is single-threaded per chip.
+const sessions = {
+  p4: { transport: null, esploader: null, images: null, flashing: false },
+  c6: { transport: null, esploader: null, images: null, flashing: false },
+};
+const CHIP_STEPS = { p4: { connect: 2, flash: 3, next: 4 },
+                     c6: { connect: 5, flash: 6, next: 7 } };
+const CHIP_FAMILY = { p4: 'ESP32-P4', c6: 'ESP32-C6' };
 
-const CHIP_STEP = { p4: 3, c6: 5 };
+async function connectChip(chip) {
+  const S = sessions[chip];
+  const btn = $('btnConnect' + chip.toUpperCase());
+  const flashBtn = $('btnFlash' + chip.toUpperCase());
+  const badge = $('pickChip' + chip.toUpperCase());
 
-async function flashChip(chip) {
-  const btn = document.querySelector(`button[data-flash="${chip}"]`);
-  if (!btn) return;
-  btn.disabled = true;
-  setActiveStep(CHIP_STEP[chip]);
-
-  if (!('serial' in navigator)) {
-    setStatus(chip, 'WebSerial unavailable', 'err');
-    log(chip, 'no WebSerial in this browser — use Chrome, Edge, Opera, Brave, Arc.', 'err');
-    btn.disabled = false; return;
-  }
-
-  const terminal = {
-    clean(){}, writeLine(s){ log(chip, String(s)); },
-    write(s){ const t = String(s).trim(); if (t) log(chip, t); },
-  };
-
-  let transport = null, esploader = null;
+  if (!('serial' in navigator)) { log('no WebSerial here. use Chrome/Edge/Opera/Brave/Arc.', 'err'); setStatus('No WebSerial', 'error'); return; }
+  if (btn) btn.classList.add('loading');
   try {
-    setStatus(chip, 'requesting port', 'live');
     const port = await navigator.serial.requestPort({});
-    transport = new Transport(port, true);
-    esploader = new ESPLoader({
-      transport, baudrate: 921600, romBaudrate: 115200,
-      terminal, debugLogging: false,
+    S.transport = new Transport(port, true);
+    S.esploader = new ESPLoader({
+      transport: S.transport,
+      baudrate: 921600, romBaudrate: 115200,
+      terminal: espTerminal, debugLogging: false,
     });
+    setStatus(`${chip.toUpperCase()}: connecting`, 'live');
+    const chipDetected = await S.esploader.main();
+    log(`${chip}/connect: ${chipDetected}`, 'ok');
+    if (badge) badge.textContent = chipDetected;
 
-    setStatus(chip, 'connecting', 'live');
-    const detected = await esploader.main();
-    log(chip, `detected: ${detected}`, 'ok');
-
-    // Guard: refuse to write ESP32-C6 images into a P4 (and vice-versa).
-    const wantFamily = (chip === 'p4') ? 'esp32-p4' : 'esp32-c6';
-    if (!String(detected).toLowerCase().includes(wantFamily)) {
-      throw new Error(`this port is a ${detected}, but the ${chip.toUpperCase()} step expects ${wantFamily.toUpperCase()}. Flip the U4 switch and retry.`);
+    // Chip-family guard: refuse to write C6 images into a P4 (or vice-versa).
+    const wanted = CHIP_FAMILY[chip];
+    if (!String(chipDetected).toUpperCase().replace(/[-_]/g, '').includes(wanted.replace(/[-_]/g, '').toUpperCase())) {
+      throw new Error(`Detected ${chipDetected}, but this step expects ${wanted}. Flip the U4 switch and retry.`);
     }
-    setStatus(chip, detected, 'ok');
+    setStatus(`${chipDetected} ready`, 'ok');
 
-    setStatus(chip, 'fetching firmware', 'live');
-    const { parts } = await loadImages(chip);
-    const total = parts.reduce((n, p) => n + p.bytes, 0);
-    const before = []; { let a=0; for (const p of parts){ before.push(a); a += p.bytes; } }
+    // Preload the image set so the Hold-to-flash button lights up.
+    if (!S.images) {
+      try { const im = await loadManifestImages(chip); S.images = im.parts; }
+      catch (e) { log(`${chip}/images: ` + e.message, 'err'); }
+    }
+    if (flashBtn) flashBtn.disabled = !S.images;
+    goTo(CHIP_STEPS[chip].flash);
+  } catch (e) {
+    if (e && (e.name === 'NotFoundError' || /No port selected/i.test(e.message || ''))) {
+      log(`${chip}/connect: no port picked`);
+    } else {
+      log(`${chip}/connect: ` + (e && e.message ? e.message : e), 'err');
+      setStatus('Connect failed', 'error');
+      showFlashError(chip, e && e.message ? e.message : String(e));
+    }
+    try { if (S.transport) await S.transport.disconnect(); } catch (_) {}
+    S.transport = null; S.esploader = null;
+  } finally {
+    if (btn) btn.classList.remove('loading');
+  }
+}
+if ($('btnConnectP4')) $('btnConnectP4').onclick = () => connectChip('p4');
+if ($('btnConnectC6')) $('btnConnectC6').onclick = () => connectChip('c6');
 
-    setStatus(chip, 'flashing', 'live');
-    await esploader.writeFlash({
-      fileArray: parts.map(p => ({ data: p.data, address: p.address })),
+async function runFlash(chip) {
+  const S = sessions[chip];
+  if (!S.esploader) { log(`${chip}/flash: connect first`, 'err'); return; }
+  if (!S.images) {
+    try { const im = await loadManifestImages(chip); S.images = im.parts; }
+    catch (e) { log(`${chip}/images: ` + e.message, 'err'); return; }
+  }
+  const btn = $('btnFlash' + chip.toUpperCase());
+  if (btn) btn.disabled = true;
+  S.flashing = true;
+  mapState(chip, null); showFlashError(chip, null);
+  setStatus(`${chip.toUpperCase()}: flashing`, 'live');
+
+  const total = S.images.reduce((n, p) => n + p.bytes, 0);
+  const before = []; { let acc = 0; for (const p of S.images) { before.push(acc); acc += p.bytes; } }
+  buildPageMap(chip, Math.max(24, Math.round(total / 4096)));
+  const partsEl = $('rdParts' + chip.toUpperCase()); if (partsEl) partsEl.textContent = `0 / ${S.images.length} parts`;
+  paintProgress(chip, 0, total);
+
+  try {
+    setPhase(chip, 'writing');
+    await S.esploader.writeFlash({
+      fileArray: S.images.map(p => ({ data: p.data, address: p.address })),
       flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep',
       eraseAll: false, compress: true,
-      reportProgress: (idx, written, fileTotal) => {
-        const done = (before[idx] || 0) + written;
-        setProgress(chip, done, total);
+      reportProgress: (fileIndex, written, fileTotal) => {
+        const done = (before[fileIndex] || 0) + written;
+        paintProgress(chip, done, total);
+        if (partsEl) partsEl.textContent = `${written >= fileTotal ? fileIndex + 1 : fileIndex} / ${S.images.length} parts`;
       },
     });
-    setProgress(chip, total, total);
-    setStatus(chip, 'resetting', 'live');
-    try { await esploader.after('hard_reset'); } catch (_) {}
-    setStatus(chip, 'done ✓', 'ok');
-    log(chip, 'flash complete.', 'ok');
+    setPhase(chip, 'resetting');
+    log(`${chip}/flash: done, resetting`, 'ok');
+    try { await S.esploader.after('hard_reset'); } catch (_) {}
+    paintProgress(chip, total, total);
+    setPhase(chip, 'done'); mapState(chip, 'done');
+    setStatus(`${chip.toUpperCase()}: flashed`, 'ok');
 
-    // Advance the wizard: after P4 → prep C6, after C6 → done.
-    setActiveStep(chip === 'p4' ? 4 : 6);
+    // Drop the transport so the next step can grab the port cleanly.
+    try { if (S.transport) await S.transport.disconnect(); } catch (_) {}
+    S.transport = null; S.esploader = null;
+
+    setTimeout(() => goTo(CHIP_STEPS[chip].next), 700);
   } catch (e) {
     const msg = (e && e.message) ? e.message : String(e);
-    if (e && (e.name === 'NotFoundError' || /No port selected/i.test(msg))) {
-      log(chip, 'no port picked.');
-      setStatus(chip, 'cancelled', '');
-    } else {
-      log(chip, msg, 'err');
-      setStatus(chip, 'failed', 'err');
-    }
+    log(`${chip}/flash: ` + msg, 'err'); showFlashError(chip, msg);
+    setPhase(chip, 'failed'); mapState(chip, 'error');
+    setStatus(`${chip.toUpperCase()}: flash failed`, 'error');
+    if (btn) btn.disabled = false;
   } finally {
-    try { if (transport) await transport.disconnect(); } catch (_) {}
-    sessions[chip] = null;
-    btn.disabled = false;
+    S.flashing = false;
   }
 }
 
-// Wire up buttons + log toggles.
-$$('button[data-flash]').forEach(b => b.addEventListener('click', () => flashChip(b.dataset.flash)));
-$$('[data-log-toggle]').forEach(cb => cb.addEventListener('change', () => {
-  const chip = cb.dataset.logToggle;
-  const el = document.querySelector(`[data-log="${chip}"]`);
-  if (el) el.classList.toggle('on', cb.checked);
-}));
+// ---- Hold-to-flash (one wire-up per chip) ---------------------------------
+const HOLD_MS = 700;
+function wireHold(chip) {
+  const btn = $('btnFlash' + chip.toUpperCase()); if (!btn) return;
+  let timer = null;
+  function reset() { if (timer) { clearTimeout(timer); timer = null; } btn.style.setProperty('--hold-dur', '140ms'); btn.style.setProperty('--hold', '0'); }
+  function begin(e) {
+    if (btn.disabled || sessions[chip].flashing || timer) return;
+    if (e.cancelable) e.preventDefault();
+    btn.style.setProperty('--hold-dur', HOLD_MS + 'ms'); btn.style.setProperty('--hold', '1');
+    timer = setTimeout(() => { reset(); runFlash(chip); }, HOLD_MS);
+  }
+  btn.addEventListener('pointerdown', begin);
+  btn.addEventListener('pointerup', reset);
+  btn.addEventListener('pointerleave', reset);
+  btn.addEventListener('pointercancel', reset);
+  btn.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) begin(e); });
+  btn.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') reset(); });
+  btn.addEventListener('blur', reset);
+}
+wireHold('p4');
+wireHold('c6');
 
-// Selecting a step by clicking it also updates the cue overlay.
-$$('.step').forEach(s => s.addEventListener('click', () => setActiveStep(+s.dataset.step)));
+// ---- Boot -----------------------------------------------------------------
+document.body.dataset.step = '0';
+syncRail(0);
+setStatus('No device', 'idle');
+setPhase('p4', 'ready'); setPhase('c6', 'ready');
+if (!('serial' in navigator)) {
+  log('no WebSerial in this browser. use Chrome, Edge, Opera, Brave or Arc.', 'err');
+  const p4 = $('btnConnectP4'), c6 = $('btnConnectC6');
+  if (p4) p4.disabled = true; if (c6) c6.disabled = true;
+  setStatus('No WebSerial', 'error');
+}
+window.addEventListener('beforeunload', ev => {
+  if (sessions.p4.flashing || sessions.c6.flashing) { ev.preventDefault(); ev.returnValue = ''; }
+});

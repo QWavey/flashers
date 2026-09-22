@@ -2,193 +2,310 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP32-P4 Hub Keylogger &mdash; WebFlasher</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP32-P4 Hub Keylogger WebFlasher</title>
+<meta name="description" content="Flash both halves of the ESP32-P4 hub keylogger — P4 (HID + MSC) then C6 (Wi-Fi web UI) — straight from the browser over USB with WebSerial.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/style.css">
 <style>
-  .hero-fig{width:100%;height:auto;display:block;color:var(--stroke,#f5f5f7)}
-  .hero-fig .case,.hero-fig .chip,.hero-fig .edge{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
-  .hero-fig .case{stroke-width:2.6}
-  .hero-fig .chip{stroke-width:2.0}
-  .hero-fig .edge{stroke-width:1.5}
-  .hero-fig .detail{fill:none;stroke:#8a8a8f;stroke-width:.9;stroke-linecap:round;stroke-linejoin:round}
-  .hero-fig .fine  {fill:none;stroke:#8a8a8f;stroke-width:.6;opacity:.85;stroke-linecap:round;stroke-linejoin:round}
-
-  .cue-halo{fill:none;stroke:var(--accent,#ff6a13);stroke-width:6;opacity:0;transition:opacity .35s ease}
-  .cue-halo.on{opacity:.9;animation:cuePulse 1.6s ease-in-out infinite}
-  @keyframes cuePulse{0%,100%{opacity:.4}50%{opacity:.95}}
-  .cue-label{font:600 22px/1 "IBM Plex Mono",ui-monospace,monospace;fill:var(--accent,#ff6a13);opacity:0;transition:opacity .35s ease;letter-spacing:.08em}
-  .cue-label.on{opacity:1}
-
-  /* Ultra-simple layout (this flasher intentionally does NOT reuse the
-     complex wizard chrome of the single-chip flasher-forge output — a two-chip
-     walk-through reads more clearly as a linear step list.) */
-  body{background:#000;color:#f5f5f7;font-family:"Archivo",system-ui,sans-serif;margin:0;min-height:100vh;line-height:1.55}
-  a{color:#8ecaff}
-  .page{max-width:960px;margin:0 auto;padding:40px 24px 80px;display:grid;gap:32px}
-  header h1{margin:0 0 4px;font-size:30px;font-weight:800;letter-spacing:-.02em}
-  header .sub{color:#a1a1a6;font-size:15px}
-  header .warn{background:rgba(255,69,58,.12);border:1px solid rgba(255,69,58,.4);border-radius:10px;padding:12px 16px;color:#ffb7b0;margin-top:14px;font-size:14px}
-  .backlink{display:inline-flex;align-items:center;gap:6px;color:#a1a1a6;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.06em;text-decoration:none;margin-bottom:12px}
-  .backlink:hover{color:#f5f5f7}
-  .figure-wrap{background:#0b0b0e;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:24px;position:relative;overflow:hidden}
-  .caption{font:500 12px "IBM Plex Mono",ui-monospace,monospace;color:#8a8a8f;letter-spacing:.06em;text-align:center;margin-top:12px}
-
-  .step{background:#0b0b0e;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:22px 24px;display:grid;grid-template-columns:44px 1fr;gap:18px;position:relative;transition:border-color .25s ease,box-shadow .25s ease}
-  .step[data-active="true"]{border-color:rgba(255,106,19,.55);box-shadow:0 0 0 3px rgba(255,106,19,.14)}
-  .step.done{border-color:rgba(48,209,88,.35)}
-  .stepno{width:44px;height:44px;border-radius:50%;background:#191919;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:"IBM Plex Mono",ui-monospace,monospace}
-  .step[data-active="true"] .stepno{background:#ff6a13;color:#000;border-color:#ff6a13}
-  .step.done .stepno{background:#30d158;color:#000;border-color:#30d158}
-  .step h2{margin:0 0 6px;font-size:20px;font-weight:700}
-  .step p{margin:0 0 10px;color:#d0d0d5;font-size:15px}
-  .step ul{margin:6px 0 0;padding-left:20px}
-  .step ul li{margin:4px 0}
-  .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;letter-spacing:.4px;text-transform:uppercase;background:rgba(255,255,255,.08);color:#a1a1a6;font-family:"IBM Plex Mono",ui-monospace,monospace}
-  .badge.hot{background:rgba(255,106,19,.18);color:#ffcda1}
-  kbd{background:#161616;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:1px 7px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px}
-
-  .actions{display:flex;gap:12px;align-items:center;margin-top:14px;flex-wrap:wrap}
-  button.primary,button.secondary{font:600 14px/1 "Archivo",sans-serif;padding:10px 18px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:transform .1s ease,filter .2s ease,opacity .2s ease}
-  button.primary{background:#f5f5f7;color:#000}
-  button.primary:hover{filter:brightness(.92)}
-  button.secondary{background:transparent;color:#f5f5f7;border-color:rgba(255,255,255,.2)}
-  button.secondary:hover{background:rgba(255,255,255,.06)}
-  button[disabled]{opacity:.45;cursor:not-allowed;filter:none}
-  .actions .status{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:#8a8a8f;letter-spacing:.05em}
-  .actions .status[data-tone="ok"]{color:#30d158}
-  .actions .status[data-tone="err"]{color:#ff453a}
-  .actions .status[data-tone="live"]{color:#ff6a13}
-
-  .progress{margin-top:14px;background:#191919;border-radius:6px;overflow:hidden;height:6px}
-  .progress > div{background:#ff6a13;height:100%;width:0;transition:width .18s ease-out}
-  .log{margin-top:12px;max-height:180px;overflow:auto;background:#050505;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;font:12px/1.55 ui-monospace,"IBM Plex Mono",monospace;color:#c0c0c5;white-space:pre-wrap;word-break:break-all;display:none}
-  .log.on{display:block}
-  .log .ts{color:#6a6a70}
-  .log .err{color:#ff453a}
-  .log .ok{color:#30d158}
-
-  .toggle{display:inline-flex;align-items:center;gap:8px;color:#a1a1a6;font-size:13px;cursor:pointer;user-select:none}
-  .toggle input{accent-color:#ff6a13}
-
-  footer{margin-top:12px;color:#8a8a8f;font-size:12px;text-align:center;font-family:"IBM Plex Mono",ui-monospace,monospace}
-  footer a{color:#a1a1a6}
-
-  @media (max-width:640px){
-    .step{grid-template-columns:36px 1fr;padding:18px 18px;gap:14px}
-    .stepno{width:36px;height:36px;font-size:14px}
-    header h1{font-size:24px}
+  /* Keep the traced hero at the same visual size as the other flashers' inline
+     figures; the .device sizing rule already targets both svg and img. */
+  .fig .device.traced { object-fit: contain; }
+  /* Small kicker recolour so the P4/C6 step chips read at a glance. */
+  .kicker.chip-p4 { color: var(--accent); }
+  .kicker.chip-c6 { color: #0A84FF; }
+  /* Numbered/bulleted checklists inside a view — a tighter list style than
+     browser defaults, matching the rest of the wizard type scale. */
+  .view .checklist { list-style: none; padding: 0; margin: var(--s-3) 0; display: grid; gap: 6px; }
+  .view .checklist li { position: relative; padding-left: 22px; color: var(--gray-1); font-size: 15px; }
+  .view .checklist li::before {
+    content: ""; position: absolute; left: 4px; top: 0.55em; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--gray-2);
   }
+  .view .checklist code {
+    background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line-2);
+    border-radius: 4px; padding: 1px 6px; font-family: var(--font-mono); font-size: 12px;
+    color: var(--white);
+  }
+  .view .checklist b { color: var(--white); font-weight: 600; }
 </style>
 </head>
 <body>
-<div class="page">
-  <header>
-    <a class="backlink" href="https://qwavey.github.io/flashers/">&larr; All flashers</a>
-    <h1>ESP32-P4 Hub Keylogger &mdash; unified flasher</h1>
-    <div class="sub">Ports of QWavey&rsquo;s <a href="https://github.com/QWavey/esp32-p4-hub-keylogger">esp32-p4-hub-keylogger</a> for the Spotpear ESP32-P4-MINI-B-M-EXT (P4 + on-board C6). One page &mdash; flash both chips right from your browser.</div>
-    <div class="warn"><b>Order matters.</b> Flash the <b>P4 first</b>, then the <b>C6</b>. The U4 switch on the M-EXT baseboard multiplexes the USB port &mdash; the wrong combination will silently fail.</div>
+
+<noscript>
+  <p class="noscript">This flasher talks to the device from the page itself, so
+  it needs JavaScript enabled.</p>
+</noscript>
+
+<div class="stage">
+
+<article class="box" id="box">
+
+  <header class="box-top">
+    <div class="box-lead">
+      <a class="backlink" href="https://qwavey.github.io/flashers/"><span class="bl-arrow" aria-hidden="true">&#8592;</span> All flashers</a>
+      <p class="brandline">ESP32&#8209;P4&#8209;HUB<span class="sep">&middot;</span>KEYLOGGER
+        <span class="ver">WebFlasher</span></p>
+    </div>
+    <p class="status" id="status" data-state="idle">
+      <span class="dot" aria-hidden="true"></span><span id="statusText">No device</span>
+    </p>
   </header>
 
-  <div class="figure-wrap">
-    <div id="figHost" class="hero-fig" aria-label="ESP32-P4-MINI board (traced)"></div>
-    <div class="caption">auto-traced from a photo &middot; 181 strokes &middot; live target highlighted below</div>
+  <div class="box-body">
+
+    <!-- left slab: traced M-EXT hub baseboard figure -->
+    <aside class="slab">
+      <figure class="fig">
+        <img class="device traced" src="./assets/figure.svg"
+             alt="Spotpear ESP32-P4-MINI-B-M-EXT baseboard, top view: two ESP32 modules (P4 + C6), U4 mode switch, four USB-C receptacles, CH334 USB hub and the pin headers along the right edge — auto-traced from a photo.">
+        <figcaption>Fig. 1 &mdash; Spotpear ESP32-P4-MINI-B-M-EXT (auto-traced)</figcaption>
+      </figure>
+
+      <dl class="spec">
+        <div><dt>Target</dt><dd>Spotpear P4-MINI-B-M-EXT</dd></div>
+        <div><dt>MCU 1</dt><dd>ESP32-P4 (N32R32)</dd></div>
+        <div><dt>MCU 2</dt><dd>ESP32-C6-MINI-1</dd></div>
+        <div><dt>USB</dt><dd>HID + MSC composite</dd></div>
+        <div><dt>Wi-Fi</dt><dd>C6 AP @ 192.168.4.1</dd></div>
+        <div><dt>Link</dt><dd>WebSerial</dd></div>
+      </dl>
+    </aside>
+
+    <!-- wizard: 7 real steps (P4 then C6) + a done view at 7 -->
+    <section class="panel">
+
+      <ol class="rail" id="rail" aria-label="Progress">
+        <li data-step="0"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Brief</b></button></li>
+        <li data-step="1"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Boot P4</b></button></li>
+        <li data-step="2"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Connect P4</b></button></li>
+        <li data-step="3"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Flash P4</b></button></li>
+        <li data-step="4"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Boot C6</b></button></li>
+        <li data-step="5"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Connect C6</b></button></li>
+        <li data-step="6"><button type="button" class="railbtn" disabled><span class="pip"></span><b>Flash C6</b></button></li>
+      </ol>
+
+      <div class="views" id="views">
+
+        <!-- 0: Brief -->
+        <section class="view is-on" data-step="0">
+          <p class="kicker">Step 01 of 07</p>
+          <h1>Read this first.</h1>
+          <p>This writes the ESP32-P4 hub keylogger firmware onto the Spotpear
+             ESP32-P4-MINI-B-M-EXT. It replaces whatever firmware is on both
+             chips. <b>Order matters</b> — the P4 side goes first, then the C6.
+             The <code>U4</code> switch on the baseboard multiplexes the Type-C
+             port; the wrong combination will silently fail.</p>
+          <p class="warn">Flashing overwrites the app and (for the C6) the
+             SPIFFS storage partition. Only run this on your own Spotpear
+             P4-MINI-B-M-EXT, N32R32 variant so the 16&nbsp;MB MSC partition
+             fits.</p>
+          <div class="acts">
+            <button class="btn solid" data-go="1">Understood, begin</button>
+          </div>
+        </section>
+
+        <!-- 1: Boot P4 -->
+        <section class="view" data-step="1">
+          <p class="kicker chip-p4">Step 02 of 07 &middot; P4</p>
+          <h1>Put the P4 in download mode.</h1>
+          <p>Route the Type-C to the ESP32-P4&rsquo;s USB-Serial-JTAG and hold
+             it in the ROM boot loader.</p>
+          <ul class="checklist">
+            <li>Flip <code>U4</code> on the baseboard to <b>position&nbsp;0</b>
+                (P4 side).</li>
+            <li>Hold <code>BOOT</code> on the P4-MINI, tap <code>RESET</code>,
+                then release <code>BOOT</code>.</li>
+            <li>Your PC enumerates a fresh serial port — that is the P4 ROM.</li>
+          </ul>
+          <p>Chrome, Edge, Opera, Brave or Arc only — Firefox and Safari have
+             no WebSerial.</p>
+          <div class="acts">
+            <button class="btn solid" data-go="2">Ready</button>
+            <button class="btn ghost" data-go="0">Back</button>
+          </div>
+        </section>
+
+        <!-- 2: Connect P4 -->
+        <section class="view" data-step="2">
+          <p class="kicker chip-p4">Step 03 of 07 &middot; P4</p>
+          <h1>Connect to the P4.</h1>
+          <p>Pick the P4&rsquo;s new port in the browser prompt. It appears
+             under vendor <code>303A</code> (Espressif) as a USB serial port.</p>
+          <div class="acts">
+            <button class="btn solid" id="btnConnectP4"><span class="ring-sm" aria-hidden="true"></span><span>Connect P4</span></button>
+            <button class="btn ghost" data-go="1">Back</button>
+          </div>
+        </section>
+
+        <!-- 3: Flash P4 -->
+        <section class="view" data-step="3">
+          <p class="kicker chip-p4">Step 04 of 07 &middot; P4</p>
+          <h1>Flash the P4.</h1>
+          <p>Write bootloader, partition table and app at their offsets, then
+             hard-reset. About 15&nbsp;seconds. Do not unplug until the log
+             says it is done.</p>
+
+          <div class="pagemap" id="pagemapP4"
+               role="progressbar" aria-valuemin="0" aria-valuemax="100"
+               aria-valuenow="0" aria-label="P4 flash progress"></div>
+
+          <p class="readout">
+            <b><span id="rdDoneP4">0</span> / <span id="rdTotalP4">0</span> KB</b>
+            <span id="rdPartsP4">0 / 0 parts</span>
+            <span class="ph" id="phaseP4">ready</span>
+          </p>
+
+          <dl class="mini">
+            <div><dt>Image</dt><dd id="pickNameP4">firmware/p4</dd></div>
+            <div><dt>Chip</dt><dd id="pickChipP4">ESP32-P4</dd></div>
+          </dl>
+
+          <p class="inline-err" id="flashErrP4" hidden></p>
+
+          <div class="acts">
+            <button class="btn solid hold" id="btnFlashP4" disabled>
+              <span class="hold-fill" aria-hidden="true"></span>
+              <span class="hold-label">Hold to flash P4</span>
+            </button>
+            <button class="btn ghost" data-go="2">Reconnect</button>
+          </div>
+        </section>
+
+        <!-- 4: Boot C6 -->
+        <section class="view" data-step="4">
+          <p class="kicker chip-c6">Step 05 of 07 &middot; C6</p>
+          <h1>Put the C6 in download mode.</h1>
+          <p>Now route the Type-C to the on-board ESP32-C6-MINI instead. The
+             C6 hosts the Wi-Fi AP and the web UI.</p>
+          <ul class="checklist">
+            <li>Flip <code>U4</code> to <b>position&nbsp;1</b> (C6 side).</li>
+            <li>Hold <code>C6_BOOT</code> on the M-EXT board, tap
+                <code>C6_RESET</code>, release <code>C6_BOOT</code>.</li>
+            <li>Another fresh serial port appears — that is the C6 in ROM.</li>
+          </ul>
+          <div class="acts">
+            <button class="btn solid" data-go="5">Ready</button>
+            <button class="btn ghost" data-go="3">Back</button>
+          </div>
+        </section>
+
+        <!-- 5: Connect C6 -->
+        <section class="view" data-step="5">
+          <p class="kicker chip-c6">Step 06 of 07 &middot; C6</p>
+          <h1>Connect to the C6.</h1>
+          <p>Pick the C6&rsquo;s new port. This flasher checks that the chip
+             family matches, so if you left the switch on the P4 side it will
+             refuse rather than brick the wrong chip.</p>
+          <div class="acts">
+            <button class="btn solid" id="btnConnectC6"><span class="ring-sm" aria-hidden="true"></span><span>Connect C6</span></button>
+            <button class="btn ghost" data-go="4">Back</button>
+          </div>
+        </section>
+
+        <!-- 6: Flash C6 -->
+        <section class="view" data-step="6">
+          <p class="kicker chip-c6">Step 07 of 07 &middot; C6</p>
+          <h1>Flash the C6.</h1>
+          <p>Write bootloader, partition table, app and the 2&nbsp;MB SPIFFS
+             storage. About 30&nbsp;seconds because the storage bundle is big.
+             When it is done, flip <code>U4</code> back to 0 and reset.</p>
+
+          <div class="pagemap" id="pagemapC6"
+               role="progressbar" aria-valuemin="0" aria-valuemax="100"
+               aria-valuenow="0" aria-label="C6 flash progress"></div>
+
+          <p class="readout">
+            <b><span id="rdDoneC6">0</span> / <span id="rdTotalC6">0</span> KB</b>
+            <span id="rdPartsC6">0 / 0 parts</span>
+            <span class="ph" id="phaseC6">ready</span>
+          </p>
+
+          <dl class="mini">
+            <div><dt>Image</dt><dd id="pickNameC6">firmware/c6</dd></div>
+            <div><dt>Chip</dt><dd id="pickChipC6">ESP32-C6</dd></div>
+          </dl>
+
+          <p class="inline-err" id="flashErrC6" hidden></p>
+
+          <div class="acts">
+            <button class="btn solid hold" id="btnFlashC6" disabled>
+              <span class="hold-fill" aria-hidden="true"></span>
+              <span class="hold-label">Hold to flash C6</span>
+            </button>
+            <button class="btn ghost" data-go="5">Reconnect</button>
+          </div>
+        </section>
+
+        <!-- 7: Done -->
+        <section class="view" data-step="7">
+          <p class="kicker done-k">Complete</p>
+          <h1>Both halves flashed.</h1>
+          <p>Flip <code>U4</code> back to 0 (P4 side) and reset. The P4 is
+             what the target PC will see over USB (HID + MSC). The C6 sits
+             on-board and serves the Wi-Fi AP.</p>
+          <ul class="checklist">
+            <li>Join the Wi-Fi <b>P4-KeyLogger</b> &middot; password
+                <b>changeme123</b>.</li>
+            <li>Open <a href="http://192.168.4.1">http://192.168.4.1</a> for the
+                web UI. The old dashboard is still at
+                <a href="http://192.168.4.1/klog">/klog</a>.</li>
+          </ul>
+          <div class="acts">
+            <button class="btn ghost" data-go="1">Flash another board</button>
+            <a class="btn ghost" href="https://github.com/QWavey/esp32-p4-hub-keylogger" target="_blank" rel="noopener">Repo</a>
+          </div>
+        </section>
+
+      </div>
+    </section>
   </div>
 
-  <!-- Step 1: intro -->
-  <section class="step" data-step="1">
-    <div class="stepno">1</div>
-    <div>
-      <h2>Requirements</h2>
-      <p>Chromium browser (Chrome, Edge, Opera, Brave, Arc), a USB-C data cable, and a Spotpear ESP32-P4-MINI-B-M-EXT (N32R32 variant so the 16&nbsp;MB MSC partition fits). Nothing is uploaded &mdash; images are served from this page and written straight to the chip in your browser.</p>
+  <footer class="box-bot">
+    <p class="footstat" id="footStat" role="status" aria-live="polite">ready</p>
+    <div class="botbtns">
+      <button class="tabbtn" id="btnFiles" aria-expanded="false" aria-controls="filesDrawer">Files</button>
+      <button class="tabbtn" id="btnConsole" aria-expanded="false" aria-controls="console">Log</button>
+      <a class="tabbtn" href="https://github.com/QWavey/esp32-p4-hub-keylogger" target="_blank" rel="noopener">GitHub &#8599;</a>
     </div>
-  </section>
-
-  <!-- Step 2: prep P4 -->
-  <section class="step" data-step="2" data-chip="p4">
-    <div class="stepno">2</div>
-    <div>
-      <h2>Prepare the <span class="badge hot">P4</span></h2>
-      <p>Route the Type-C to the ESP32-P4&rsquo;s USB-Serial-JTAG and hold it in the ROM boot loader.</p>
-      <ul>
-        <li>Move the <b>U4 switch</b> to <b>position 0</b> (P4 side).</li>
-        <li>Hold <kbd>BOOT</kbd> on the P4-MINI, tap <kbd>RESET</kbd>, then release <kbd>BOOT</kbd>.</li>
-        <li>Your PC enumerates a new serial port &mdash; that&rsquo;s the P4 ROM loader.</li>
-      </ul>
-    </div>
-  </section>
-
-  <!-- Step 3: flash P4 -->
-  <section class="step" data-step="3" data-chip="p4" id="flashP4">
-    <div class="stepno">3</div>
-    <div>
-      <h2>Flash the P4 firmware <span class="badge">chip family: ESP32-P4</span></h2>
-      <p>Click <b>Connect &amp; flash P4</b> and pick the port that just appeared. About 15&nbsp;seconds. When it&rsquo;s done, tap <kbd>RESET</kbd> on the P4 (no BOOT this time).</p>
-      <div class="actions">
-        <button class="primary" data-flash="p4">Connect &amp; flash P4</button>
-        <label class="toggle"><input type="checkbox" data-log-toggle="p4"> show log</label>
-        <span class="status" data-status="p4">idle</span>
-      </div>
-      <div class="progress" data-progress="p4"><div></div></div>
-      <div class="log" data-log="p4"></div>
-    </div>
-  </section>
-
-  <!-- Step 4: prep C6 -->
-  <section class="step" data-step="4" data-chip="c6">
-    <div class="stepno">4</div>
-    <div>
-      <h2>Prepare the <span class="badge hot">C6</span></h2>
-      <p>Route the same Type-C to the on-board ESP32-C6-MINI instead, then hold it in ROM.</p>
-      <ul>
-        <li>Move the <b>U4 switch</b> to <b>position 1</b> (C6 side).</li>
-        <li>Hold <kbd>C6_BOOT</kbd> on the M-EXT board, tap <kbd>C6_RESET</kbd>, release <kbd>C6_BOOT</kbd>.</li>
-        <li>Another fresh serial port appears &mdash; the C6 in ROM.</li>
-      </ul>
-    </div>
-  </section>
-
-  <!-- Step 5: flash C6 -->
-  <section class="step" data-step="5" data-chip="c6" id="flashC6">
-    <div class="stepno">5</div>
-    <div>
-      <h2>Flash the C6 firmware <span class="badge">chip family: ESP32-C6</span></h2>
-      <p>Click <b>Connect &amp; flash C6</b> and pick the C6&rsquo;s new port. About 30&nbsp;seconds &mdash; the C6 image is bigger (2&nbsp;MB SPIFFS bundle with the full Hak5 language pack).</p>
-      <div class="actions">
-        <button class="primary" data-flash="c6">Connect &amp; flash C6</button>
-        <label class="toggle"><input type="checkbox" data-log-toggle="c6"> show log</label>
-        <span class="status" data-status="c6">idle</span>
-      </div>
-      <div class="progress" data-progress="c6"><div></div></div>
-      <div class="log" data-log="c6"></div>
-    </div>
-  </section>
-
-  <!-- Step 6: done -->
-  <section class="step" data-step="6">
-    <div class="stepno">6</div>
-    <div>
-      <h2>Connect</h2>
-      <p>Flip the U4 switch back to <b>0</b> (P4 side) and reset. The P4 is what the target PC sees over USB (HID + MSC composite). The C6 sits on-board and serves the Wi-Fi AP.</p>
-      <ul>
-        <li>Look for the Wi-Fi network <b>P4-KeyLogger</b> &mdash; password <b>changeme123</b>.</li>
-        <li>Open <a href="http://192.168.4.1">http://192.168.4.1</a> &mdash; that&rsquo;s the ported BadUSB UI.</li>
-        <li>The old keylog dashboard is still at <a href="http://192.168.4.1/klog">/klog</a>; the Keylog tab reads from the same live channel.</li>
-      </ul>
-    </div>
-  </section>
-
-  <footer>
-    Source: <a href="https://github.com/QWavey/esp32-p4-hub-keylogger">esp32-p4-hub-keylogger</a>
-    &nbsp;&middot;&nbsp; Traced with <a href="https://github.com/QWavey/flasher-forge">flasher-forge</a>
-    &nbsp;&middot;&nbsp; Runs entirely in your browser
   </footer>
+
+  <div class="drawer" id="filesDrawer" inert>
+    <div class="drawer-head"><b>Files</b>
+      <button class="x" data-close="filesDrawer" aria-label="Close files">&times;</button></div>
+    <ul class="dl-list">
+      <li><a href="./firmware/p4/bootloader.bin" download><b>p4/bootloader.bin</b><span>ESP32-P4 bootloader (offset 0x2000).</span></a></li>
+      <li><a href="./firmware/p4/partition-table.bin" download><b>p4/partition-table.bin</b><span>Partition table (offset 0x8000).</span></a></li>
+      <li><a href="./firmware/p4/app.bin" download><b>p4/app.bin</b><span>Application image (offset 0x10000).</span></a></li>
+      <li><a href="./firmware/c6/bootloader.bin" download><b>c6/bootloader.bin</b><span>ESP32-C6 bootloader (offset 0x0).</span></a></li>
+      <li><a href="./firmware/c6/partition-table.bin" download><b>c6/partition-table.bin</b><span>Partition table (offset 0x8000).</span></a></li>
+      <li><a href="./firmware/c6/app.bin" download><b>c6/app.bin</b><span>Application image (offset 0x10000).</span></a></li>
+      <li><a href="./firmware/c6/storage.bin" download><b>c6/storage.bin</b><span>SPIFFS UI bundle (offset 0x200000).</span></a></li>
+    </ul>
+  </div>
+
+  <div class="drawer" id="console" inert>
+    <div class="drawer-head"><b>Log</b>
+      <button class="x" data-close="console" aria-label="Close log">&times;</button></div>
+    <div class="drawer-log" id="consoleOut" role="log" aria-live="polite"></div>
+  </div>
+
+</article>
+
+<p class="legal">
+  Flashes only over your own USB connection; nothing is uploaded. The images are
+  served from this page and written straight to the chip in your browser. Source
+  and build instructions at
+  <a href="https://github.com/QWavey/esp32-p4-hub-keylogger" target="_blank" rel="noopener">QWavey/esp32-p4-hub-keylogger</a>.
+</p>
+
 </div>
 
-<script type="module" src="js/flasher.js"></script>
+<script type="module" src="./js/flasher.js"></script>
 </body>
 </html>
