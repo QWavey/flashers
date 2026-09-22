@@ -260,6 +260,18 @@ async function runFlash(chip) {
   const partsEl = $('rdParts' + chip.toUpperCase()); if (partsEl) partsEl.textContent = `0 / ${S.images.length} parts`;
   paintProgress(chip, 0, total);
 
+  // Track whether every payload byte was reported as transmitted. If
+  // writeFlash then throws AFTER all bytes hit 100%, the failure is very
+  // likely just the trailing serial ACK — but we CANNOT assume the write
+  // is truly durable, because SPIFFS/flash controller sees the last chunk
+  // as untrusted until the "Leaving..." handshake commits it. So: on that
+  // specific post-write error, we do NOT advance to Done. Instead we
+  // surface it as an "ambiguous — reflash to be safe" state, distinct
+  // from a mid-write failure, because for the C6 in particular an
+  // interrupted storage.bin will boot into a silently-reformatted empty
+  // SPIFFS (see the "SPIFFS partition is empty" page in the C6 firmware).
+  let lastByteReported = false;
+  let lastFileIndex = S.images.length - 1;
   try {
     setPhase(chip, 'writing');
     await S.esploader.writeFlash({
@@ -270,6 +282,7 @@ async function runFlash(chip) {
         const done = (before[fileIndex] || 0) + written;
         paintProgress(chip, done, total);
         if (partsEl) partsEl.textContent = `${written >= fileTotal ? fileIndex + 1 : fileIndex} / ${S.images.length} parts`;
+        if (fileIndex >= lastFileIndex && written >= fileTotal) lastByteReported = true;
       },
     });
     setPhase(chip, 'resetting');
@@ -286,10 +299,28 @@ async function runFlash(chip) {
     setTimeout(() => goTo(CHIP_STEPS[chip].next), 700);
   } catch (e) {
     const msg = (e && e.message) ? e.message : String(e);
-    log(`${chip}/flash: ` + msg, 'err'); showFlashError(chip, msg);
+    if (lastByteReported) {
+      // Post-write serial glitch — common on the CH334 hub after the last
+      // chunk of a large image (the C6 storage.bin especially). The write
+      // MAY have committed, but SPIFFS can't checksum an image that never
+      // saw the trailing "Leaving..." handshake, so on next boot the C6
+      // will reformat and boot empty. Force a reflash.
+      log(`${chip}/flash: reached 100% then hit a post-write serial glitch (${msg}). ` +
+          `The chip may have booted with an INCOMPLETE image — reflash before trusting it.`, 'err');
+      showFlashError(chip,
+        `Wrote 100% of ${chip.toUpperCase()} but the final serial handshake failed (${msg}). ` +
+        `On the C6 this typically boots with an empty SPIFFS (192.168.4.1 will show ` +
+        `"SPIFFS partition is empty"). Reset the ${chip.toUpperCase()} back into ROM ` +
+        `mode and rerun this step.`);
+    } else {
+      log(`${chip}/flash: ` + msg, 'err'); showFlashError(chip, msg);
+    }
     setPhase(chip, 'failed'); mapState(chip, 'error');
-    setStatus(`${chip.toUpperCase()}: flash failed`, 'error');
+    setStatus(`${chip.toUpperCase()}: ${lastByteReported ? 'flash may be incomplete' : 'flash failed'}`, 'error');
     if (btn) btn.disabled = false;
+    // Drop the transport so the reconnect path can grab it cleanly.
+    try { if (S.transport) await S.transport.disconnect(); } catch (_) {}
+    S.transport = null; S.esploader = null;
   } finally {
     S.flashing = false;
   }
