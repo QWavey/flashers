@@ -21,19 +21,24 @@
      Shift+wheel pass through unchanged. On phones (<640px) it falls back
      to a vertical stack. */
 
-  html, body {
+  /* Only put overflow on <html> — that pins the scroll container to a
+     single element so `document.scrollingElement` and `window.scrollBy`
+     are unambiguous and mouse-wheel remap actually moves the viewport.
+     Setting overflow on BOTH html and body confuses the browser about
+     which owns the scroll (Chromium picks body, Firefox picks html) and
+     was the reason vertical wheel wasn't translating to horizontal on
+     desktop. */
+  html {
     overflow-x: auto; overflow-y: hidden;
     height: 100vh; height: 100svh;
     scroll-behavior: smooth;
-    /* Hide the stock scrollbars entirely. A pulsing arrow-in-circle hint
-       on the right edge (see .scroll-hint) tells the user the page scrolls
-       sideways — cleaner than a bar that people try to drag and can't. */
     scrollbar-width: none;      /* Firefox */
     -ms-overflow-style: none;   /* Old IE / Edge */
   }
-  html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display: none; }
-
+  html::-webkit-scrollbar { width: 0; height: 0; display: none; }
   body {
+    overflow: visible;
+    height: 100vh; height: 100svh;
     flex-direction: row; align-items: stretch;
     padding: 0; gap: 0;
   }
@@ -78,8 +83,8 @@
     display: flex; flex-direction: row; gap: 32px;
     grid-template-columns: none;
     flex-shrink: 0;
-    perspective: 1400px;
-    perspective-origin: center center;
+    /* No perspective needed anymore — we swapped the 3D tilt for a flat
+       lift + shadow hover (the pattern the ESP UI actually uses). */
   }
 
   /* --- card sizing (horizontal filmstrip variant) --- */
@@ -93,50 +98,49 @@
     transform-style: preserve-3d;
     transform-origin: 50% 50%;
     transition:
-      transform 380ms cubic-bezier(0.28,0.11,0.32,1),
-      box-shadow 380ms cubic-bezier(0.28,0.11,0.32,1),
+      transform 320ms cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 320ms cubic-bezier(0.4, 0, 0.2, 1),
+      filter 320ms cubic-bezier(0.4, 0, 0.2, 1),
       border-color 220ms var(--e-out),
       background 220ms var(--e-out);
   }
   .card .art { flex: 1; min-height: 0; overflow: hidden; }
 
-  /* Apple-style parallax tilt driven from JS. When the pointer is over
-     a card the JS sets --rx / --ry (in deg) and --mx / --my (0-100 for
-     the sheen origin). On leave the vars go back to 0 and the whole
-     transform relaxes to rest. */
+  /* Simple, Apple-style LIFT hover — the same pattern the ESP UI's
+     buttons use (translateY + shadow + brightness). No 3D tilt, no
+     cursor-tracked sheen — those looked flashy but the user found
+     them subtle to the point of invisible on this card size. */
   .card {
-    --rx: 0deg; --ry: 0deg;
     --mx: 50%; --my: 40%;
-    --lift: 0px;
-    transform:
-      perspective(1400px)
-      translateZ(var(--lift))
-      rotateX(var(--rx))
-      rotateY(var(--ry));
+    transform: translateY(0) scale(1);
+    will-change: transform, box-shadow;
   }
   .card:hover {
-    --lift: 12px;
-    border-color: var(--line-2);
+    transform: translateY(-8px) scale(1.015);
+    border-color: rgba(255, 255, 255, 0.28);
     box-shadow:
-      0 30px 60px -30px rgba(0, 0, 0, 0.9),
-      0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+      0 24px 50px -18px rgba(0, 0, 0, 0.85),
+      0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+    filter: brightness(1.06);
   }
-  /* Cursor-tracked highlight sheen. Only visible on hover; the radial
-     gradient origin follows --mx / --my. */
+  /* Subtle cursor-tracked highlight sheen — softer than before so it
+     reads as a light, not a spotlight. --mx / --my come from the JS
+     pointermove handler on the card. */
   .card::after {
     content: "";
     position: absolute; inset: 0; pointer-events: none;
-    background: radial-gradient(600px circle at var(--mx) var(--my),
-                                rgba(255, 255, 255, 0.06),
-                                rgba(255, 255, 255, 0) 45%);
-    opacity: 0; transition: opacity 220ms var(--e-out);
+    background: radial-gradient(400px circle at var(--mx) var(--my),
+                                rgba(255, 255, 255, 0.05),
+                                rgba(255, 255, 255, 0) 55%);
+    opacity: 0; transition: opacity 240ms cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: inherit;
+    mix-blend-mode: screen;
   }
   .card:hover::after { opacity: 1; }
 
   @keyframes cardFloat {
-    from { opacity: 0; transform: perspective(1400px) translateZ(-30px) rotateY(-6deg); }
-    to   { opacity: 1; transform: perspective(1400px) translateZ(0) rotateY(0); }
+    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)    scale(1); }
   }
 
   /* --- repo chip that lives in the top-right of every card --- */
@@ -167,6 +171,8 @@
      right; fades on first scroll and dismounts. The old thin scroll-thumb
      at the bottom is gone — it read as a broken control since it moved
      but users kept trying to drag it. --- */
+  /* Real button (not a div) so the browser gives us keyboard focus,
+     Enter-to-activate, and the correct semantics for AT users. */
   .scroll-hint {
     position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
     z-index: 10;
@@ -177,11 +183,19 @@
     color: rgba(245, 245, 247, 0.92);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.8);
-    pointer-events: none;
+    cursor: pointer;
+    padding: 0;
     animation: hintPulse 2s cubic-bezier(0.28, 0.11, 0.32, 1) infinite;
+    transition: opacity .35s ease;
   }
+  .scroll-hint:hover {
+    background: rgba(28, 28, 32, 0.86);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #fff;
+  }
+  .scroll-hint:active { transform: translateY(-50%) scale(0.94); }
   .scroll-hint svg { width: 22px; height: 22px; display: block; }
-  .scroll-hint.dismissed { opacity: 0; transition: opacity .35s ease; }
+  .scroll-hint.dismissed { opacity: 0; pointer-events: none; animation: none; }
   @keyframes hintPulse {
     0%, 100% { transform: translateY(-50%) translateX(0);   box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.8); }
     50%      { transform: translateY(-50%) translateX(6px); box-shadow: 0 12px 28px -8px rgba(255, 255, 255, 0.18); }
@@ -195,8 +209,9 @@
 
   /* --- mobile: fall back to vertical stack --- */
   @media (max-width: 640px) {
-    html, body { overflow-x: hidden; overflow-y: auto; height: auto; scrollbar-width: auto; -ms-overflow-style: auto; }
-    html::-webkit-scrollbar, body::-webkit-scrollbar { display: initial; width: 8px; height: 8px; }
+    html { overflow-x: hidden; overflow-y: auto; height: auto; scrollbar-width: auto; -ms-overflow-style: auto; }
+    body { overflow: visible; height: auto; }
+    html::-webkit-scrollbar { display: initial; width: 8px; height: 8px; }
     body { flex-direction: column; padding: var(--s-6) var(--s-5); }
     .mast { position: static; width: 100%; height: auto; padding: 0 0 24px; background: none; text-align: center; }
     .mast .mast-github { align-self: center; }
@@ -736,25 +751,59 @@
 
 </div>
 
-<div class="scroll-hint" id="scrollHint" aria-hidden="true">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<button class="scroll-hint" id="scrollHint" type="button" aria-label="Scroll to end of flashers list">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M5 12h14"/>
     <path d="M13 5l7 7-7 7"/>
   </svg>
-</div>
+</button>
 
 <script>
 // ----------------------------------------------------------------------
-//  Horizontal-scroll wiring, Apple-style tilt hover, per-card repo chips,
-//  and the custom slim scroll indicator at the bottom edge. Everything
-//  is confined to this file — no other JS is loaded by the hub page.
+//  Horizontal-scroll wiring for the flashers hub:
+//    1. Injects a "Repo ↗" chip on every card (repo per card).
+//    2. Tracks the pointer over each card and sets --mx / --my CSS custom
+//       props so the subtle hover sheen follows the mouse.
+//    3. Turns vertical wheel motion into horizontal scroll.
+//    4. Wires keyboard nav (arrows, PageUp/Down, Home/End, Space).
+//    5. Manages the scroll-hint circle: click = jump to end, and it
+//       auto-hides both when the user scrolls past ~20 px AND when the
+//       page is already at/near the right edge.
 // ----------------------------------------------------------------------
 (function () {
   const mq = window.matchMedia('(max-width: 640px)');
-  const scroller = document.scrollingElement || document.documentElement;
+
+  // ------------------------- scroll target detection ------------------
+  // With overflow-x: auto on BOTH <html> and <body>, exactly one of the
+  // two actually owns the scroll (browser-dependent). We compute it once
+  // and then always write to that element AND fall back to window.scrollBy
+  // — the redundancy costs nothing and covers Firefox/Chromium
+  // differences plus edge cases where scrollingElement lies.
+  function getScrollX()      { return window.scrollX || document.scrollingElement.scrollLeft || document.documentElement.scrollLeft || document.body.scrollLeft; }
+  function getScrollMaxX()   {
+    const de = document.documentElement, b = document.body;
+    return Math.max(
+      de.scrollWidth - de.clientWidth,
+      b.scrollWidth  - b.clientWidth,
+      0
+    );
+  }
+  function scrollByX(dx, smooth) {
+    // Try every plausible scroller so we don't care which one owns the
+    // scroll. `window.scrollBy` is the authoritative call in modern
+    // browsers; the direct property writes are the belt-and-suspenders.
+    try { window.scrollBy({ left: dx, behavior: smooth ? 'smooth' : 'auto' }); } catch (_) {}
+    // These are no-ops on whichever element doesn't own the scroll.
+    document.documentElement.scrollLeft += dx;
+    document.body.scrollLeft += dx;
+  }
+  function scrollToX(x, smooth) {
+    try { window.scrollTo({ left: x, behavior: smooth ? 'smooth' : 'auto' }); } catch (_) {}
+    document.documentElement.scrollLeft = x;
+    document.body.scrollLeft = x;
+  }
 
   // ------------------------- 1) repo chips ----------------------------
-  // Map card href → its source repo. New tiles just need one line here.
   const REPO = {
     './rubberless-ducky/':       'https://github.com/QWavey/WebFlasher',
     './esp-s3-key/':             'https://github.com/QWavey/ESP-S3-Key-BadUSB',
@@ -771,9 +820,6 @@
     chip.setAttribute('tabindex', '0');
     chip.setAttribute('aria-label', 'Open source repo on GitHub');
     chip.innerHTML = 'Repo <span class="arr">&#8599;</span>';
-    // A nested <a> inside the card <a> would be invalid HTML — use a
-    // span with an explicit navigation handler that stops the outer
-    // card link's default click behavior.
     const go = (e) => {
       e.preventDefault(); e.stopPropagation();
       window.open(repo, '_blank', 'noopener,noreferrer');
@@ -785,57 +831,67 @@
     card.appendChild(chip);
   });
 
-  // ------------------------- 2) Apple tilt ----------------------------
-  // Pointer-tracked tilt with a subtle sheen. We update CSS custom
-  // properties on the card (never touch its `transform` directly) so
-  // the existing hover rules in CSS compose cleanly with the animation.
-  const MAX_TILT = 6;              // degrees at the edge of the card
-  const RESET_ON_LEAVE = true;
-  function bindTilt(card) {
+  // ------------------------- 2) hover sheen tracking ------------------
+  // The 3D tilt is gone (replaced by a flat lift + shadow hover in CSS).
+  // We still track the cursor to move the highlight-sheen's origin —
+  // that's the tiny bit of "life" the hover gets, so it doesn't feel
+  // static like a plain button.
+  function bindSheen(card) {
     let raf = 0, pending = null;
     function apply() {
-      raf = 0;
-      if (!pending) return;
-      const { rx, ry, mx, my } = pending;
-      card.style.setProperty('--rx', rx + 'deg');
-      card.style.setProperty('--ry', ry + 'deg');
-      card.style.setProperty('--mx', mx + '%');
-      card.style.setProperty('--my', my + '%');
+      raf = 0; if (!pending) return;
+      card.style.setProperty('--mx', pending.mx + '%');
+      card.style.setProperty('--my', pending.my + '%');
     }
     card.addEventListener('pointermove', (e) => {
       if (mq.matches) return;
       const r = card.getBoundingClientRect();
-      const px = (e.clientX - r.left) / r.width;   // 0..1
-      const py = (e.clientY - r.top)  / r.height;  // 0..1
       pending = {
-        ry: (px - 0.5) *  2 * MAX_TILT,
-        rx: (0.5 - py) *  2 * MAX_TILT,
-        mx: px * 100,
-        my: py * 100,
+        mx: ((e.clientX - r.left) / r.width)  * 100,
+        my: ((e.clientY - r.top)  / r.height) * 100,
       };
       if (!raf) raf = requestAnimationFrame(apply);
     });
-    if (RESET_ON_LEAVE) {
-      card.addEventListener('pointerleave', () => {
-        pending = { rx: 0, ry: 0, mx: 50, my: 40 };
-        if (!raf) raf = requestAnimationFrame(apply);
-      });
-    }
+    card.addEventListener('pointerleave', () => {
+      pending = { mx: 50, my: 40 };
+      if (!raf) raf = requestAnimationFrame(apply);
+    });
   }
-  document.querySelectorAll('.card').forEach(bindTilt);
+  document.querySelectorAll('.card').forEach(bindSheen);
 
-  // ------------------------- 3) wheel → horizontal --------------------
-  function pxDelta(e) {
-    if (e.deltaMode === 1) return e.deltaY * 40;                    // line
-    if (e.deltaMode === 2) return e.deltaY * window.innerHeight;    // page
-    return e.deltaY;                                                // pixel
-  }
+  // ------------------------- 3) scroll-hint behavior ------------------
   const hint = document.getElementById('scrollHint');
   let hintDismissed = false;
+  const END_TOL = 24;   // px from the right edge that counts as "at end"
+
+  function updateHintForPosition() {
+    if (!hint || hintDismissed) return;
+    const x = getScrollX(), max = getScrollMaxX();
+    // Hide when at/near the right edge. If they scroll back left the
+    // hint stays hidden — one-shot dismissal (matches user's ask:
+    // "when scrolled too much to right the arrow should dissapear").
+    if (max > 0 && x >= max - END_TOL) dismissHint();
+  }
   function dismissHint() {
     if (hintDismissed || !hint) return;
     hintDismissed = true; hint.classList.add('dismissed');
     setTimeout(() => hint.remove(), 500);
+  }
+  if (hint) {
+    hint.addEventListener('click', (e) => {
+      e.preventDefault();
+      scrollToX(getScrollMaxX(), true);
+      // The scroll event will fire and dismiss us; also dismiss now for
+      // touch environments where the smooth scroll can be swallowed.
+      setTimeout(dismissHint, 900);
+    });
+  }
+
+  // ------------------------- 4) wheel → horizontal --------------------
+  function pxDelta(e) {
+    if (e.deltaMode === 1) return e.deltaY * 40;                    // line
+    if (e.deltaMode === 2) return e.deltaY * window.innerHeight;    // page
+    return e.deltaY;                                                // pixel
   }
   window.addEventListener('wheel', (e) => {
     if (mq.matches) return;
@@ -844,11 +900,11 @@
     const dy = pxDelta(e);
     if (dy === 0) return;
     e.preventDefault();
-    scroller.scrollLeft += dy;
-    dismissHint();
+    scrollByX(dy, false);
+    updateHintForPosition();
   }, { passive: false });
 
-  // ------------------------- 4) keyboard nav --------------------------
+  // ------------------------- 5) keyboard nav --------------------------
   window.addEventListener('keydown', (e) => {
     if (mq.matches) return;
     if (e.target && ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
@@ -857,15 +913,19 @@
     if      (e.key === 'ArrowRight' || e.key === 'PageDown') dx = step;
     else if (e.key === 'ArrowLeft'  || e.key === 'PageUp')   dx = -step;
     else if (e.key === 'Home') jump = 0;
-    else if (e.key === 'End')  jump = scroller.scrollWidth;
+    else if (e.key === 'End')  jump = getScrollMaxX();
     else if (e.key === ' ')    dx = e.shiftKey ? -step : step;
-    if (dx)      { e.preventDefault(); scroller.scrollBy({ left: dx, behavior: 'smooth' }); dismissHint(); }
-    if (jump !== null) { e.preventDefault(); scroller.scrollTo({ left: jump, behavior: 'smooth' }); dismissHint(); }
+    if (dx)      { e.preventDefault(); scrollByX(dx, true); }
+    if (jump !== null) { e.preventDefault(); scrollToX(jump, true); }
   });
 
-  // ------------------------- 5) dismiss hint on any scroll ------------
+  // ------------------------- 6) unified scroll listener --------------
+  // Listens on window; the browser fires here regardless of which of
+  // html/body actually owns the scroll.
   window.addEventListener('scroll', () => {
-    if (scroller.scrollLeft > 20) dismissHint();
+    // First-scroll dismissal — moving away from the far left retires the
+    // hint. Also handles the "near end" case above.
+    if (!hintDismissed && getScrollX() > 20) updateHintForPosition();
   }, { passive: true });
 })();
 </script>
