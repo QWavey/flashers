@@ -259,6 +259,7 @@ async function connectChip(chip) {
   if (btn) btn.classList.add('loading');
   try {
     const port = await navigator.serial.requestPort({});
+    S.port = port;
     S.transport = new Transport(port, true);
     S.esploader = new ESPLoader({
       transport: S.transport,
@@ -351,10 +352,30 @@ async function runFlash(chip) {
       // storage.bin is the exemplar). We change baud AFTER stub upload so
       // the sync still runs at 921600.
       log(`${chip}/flash: hub-safe mode — dropping to 115200 baud, no compression`, 'ok');
-      const setter = S.esploader.changeBaud || S.esploader.setBaudrate;
-      if (setter) {
-        try { await setter.call(S.esploader, 115200); }
-        catch (e) { log(`${chip}/flash: could not lower baud (${e.message}); continuing anyway`, 'err'); }
+      // esptool.js changeBaud() takes NO argument — it changes the live link
+      // to whatever this.baudrate holds (921600 after stub upload). The old
+      // code passed 115200 as an arg, which was silently ignored, so the
+      // whole erase+write still ran at 921600 and kept dying on the hub.
+      // Lower the field FIRST, then change, so we truly drop to 115200.
+      try {
+        S.esploader.baudrate = 115200;
+        if (typeof S.esploader.changeBaud === 'function') {
+          await S.esploader.changeBaud();
+        }
+      } catch (e) {
+        log(`${chip}/flash: baud-change glitched (${e.message}); reconnecting fresh at 115200`, 'err');
+        // The change command itself was eaten by a hub disconnect. Rebuild
+        // the link from a clean ROM sync at 115200 so erase/write start from
+        // a known-good low-speed connection instead of a desynced one.
+        try { if (S.transport) await S.transport.disconnect(); } catch (_) {}
+        S.transport = new Transport(S.port, true);
+        S.esploader = new ESPLoader({
+          transport: S.transport,
+          baudrate: 115200, romBaudrate: 115200,
+          terminal: espTerminal, debugLogging: false,
+        });
+        await S.esploader.main();
+        log(`${chip}/flash: reconnected at 115200`, 'ok');
       }
     }
     await S.esploader.writeFlash({
