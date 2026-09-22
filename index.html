@@ -13,61 +13,167 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./css/style.css">
 <style>
-  /* ---- horizontal-scroll layout ---------------------------------------
-     The page is a filmstrip: mast on the far left, cards in a row after
-     it, foot on the far right. Vertical scroll is disabled; mouse-wheel
-     `deltaY` is translated to `scrollLeft` by the script at the bottom
-     of <body>, and native two-finger touchpad horizontal (or Shift+wheel)
-     passes through unchanged. On phones the native left/right swipe
-     handles it. Mobile UAs that respect touch-action still work fine
-     since the layout is just wide, not weirdly-transformed. */
+  /* ---- horizontal-scroll filmstrip ------------------------------------
+     Layout: a fixed <header class="mast"> on the left, a horizontally-
+     scrolling row of cards to its right. Vertical scroll is disabled;
+     mouse-wheel deltaY is translated to scrollLeft by the script at the
+     bottom of <body>. Native two-finger touchpad horizontal (deltaX) and
+     Shift+wheel pass through unchanged. On phones (<640px) it falls back
+     to a vertical stack. */
+
   html, body {
     overflow-x: auto; overflow-y: hidden;
     height: 100vh; height: 100svh;
     scroll-behavior: smooth;
-    scrollbar-width: thin; scrollbar-color: var(--gray-2) transparent;
+    /* Hide the stock scrollbars — a custom slim progress indicator sits
+       at the bottom edge instead (see .scroll-track / .scroll-thumb). */
+    scrollbar-width: none;      /* Firefox */
+    -ms-overflow-style: none;   /* Old IE / Edge */
   }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
   body {
-    flex-direction: row; align-items: center;
+    flex-direction: row; align-items: stretch;
     padding: 0; gap: 0;
-    /* Body itself IS the horizontal scroll container. The wrap inside
-       laid out horizontally and grows as wide as its content needs. */
   }
+
+  /* --- fixed mast on the left, does NOT scroll with the cards --- */
+  .mast {
+    position: fixed; left: 0; top: 0;
+    width: min(420px, 34vw); height: 100vh;
+    padding: 40px 32px 40px 48px;
+    display: flex; flex-direction: column; justify-content: center;
+    text-align: left; margin: 0;
+    background: linear-gradient(90deg, var(--black) 78%, rgba(0,0,0,0));
+    z-index: 5; pointer-events: auto;
+  }
+  .mast h1 { font-size: clamp(48px, 6vw, 88px); line-height: .95; }
+  .mast .eyebrow, .mast p { margin-left: 0; margin-right: 0; }
+  .mast .mast-github {
+    margin-top: 28px; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--gray-2); text-decoration: none; align-self: flex-start;
+    padding: 6px 10px; border: 1px solid var(--line-1); border-radius: 999px;
+    transition: color var(--d-2) var(--e-out), border-color var(--d-2) var(--e-out);
+  }
+  .mast .mast-github:hover { color: var(--white); border-color: var(--line-2); }
+
+  /* --- .wrap becomes the horizontal filmstrip; left-padded to clear the
+         fixed mast, right-padded so the last card has breathing room --- */
   .wrap {
     max-width: none; width: auto;
     display: flex; flex-direction: row; align-items: center;
-    gap: var(--s-8, 64px); padding: var(--s-6, 32px) var(--s-7, 48px);
+    gap: 32px; padding: 48px 96px 48px calc(min(420px, 34vw) + 32px);
     min-height: 100vh;
+    /* Give every card the same 3D reference frame so the Apple-style
+       tilt below rotates in a consistent perspective. */
+    perspective: 1400px;
+    perspective-origin: center center;
   }
-  .mast {
-    flex-shrink: 0; text-align: left;
-    width: min(560px, 78vw); margin: 0;
-  }
-  .mast h1 { font-size: clamp(56px, 8vw, 110px); }
-  .mast .eyebrow, .mast p { margin-left: 0; margin-right: 0; }
+
   .grid {
-    display: flex; flex-direction: row; gap: var(--s-5, 24px);
+    display: flex; flex-direction: row; gap: 32px;
     grid-template-columns: none;
     flex-shrink: 0;
   }
+
+  /* --- card sizing (horizontal filmstrip variant) --- */
   .card {
-    width: min(460px, 82vw); flex-shrink: 0;
-    height: min(640px, 82vh);
+    position: relative;                       /* anchor for the repo chip */
+    width: min(440px, 80vw); flex-shrink: 0;
+    height: min(620px, 80vh);
     grid-template-rows: 1fr auto;
+    /* Reset the vertical-grid card animations that fought with the tilt. */
+    animation: cardFloat 700ms cubic-bezier(0.28,0.11,0.32,1) both;
+    transform-style: preserve-3d;
+    transform-origin: 50% 50%;
+    transition:
+      transform 380ms cubic-bezier(0.28,0.11,0.32,1),
+      box-shadow 380ms cubic-bezier(0.28,0.11,0.32,1),
+      border-color 220ms var(--e-out),
+      background 220ms var(--e-out);
   }
   .card .art { flex: 1; min-height: 0; overflow: hidden; }
-  .foot {
-    flex-shrink: 0; width: auto; max-width: 320px;
-    display: flex; flex-direction: column; gap: 8px;
-    padding: 0; border: none; margin: 0;
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 12px; letter-spacing: 0.06em;
-  }
-  .foot a { display: block; color: var(--gray-2); text-decoration: none; padding: 4px 0; border-bottom: 1px solid transparent; }
-  .foot a:hover { color: var(--white); border-color: var(--line-2); }
 
-  /* A tiny hint arrow on the right edge so the horizontal-scroll
-     affordance is discoverable (dismisses on first scroll). */
+  /* Apple-style parallax tilt driven from JS. When the pointer is over
+     a card the JS sets --rx / --ry (in deg) and --mx / --my (0-100 for
+     the sheen origin). On leave the vars go back to 0 and the whole
+     transform relaxes to rest. */
+  .card {
+    --rx: 0deg; --ry: 0deg;
+    --mx: 50%; --my: 40%;
+    --lift: 0px;
+    transform:
+      perspective(1400px)
+      translateZ(var(--lift))
+      rotateX(var(--rx))
+      rotateY(var(--ry));
+  }
+  .card:hover {
+    --lift: 12px;
+    border-color: var(--line-2);
+    box-shadow:
+      0 30px 60px -30px rgba(0, 0, 0, 0.9),
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  }
+  /* Cursor-tracked highlight sheen. Only visible on hover; the radial
+     gradient origin follows --mx / --my. */
+  .card::after {
+    content: "";
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(600px circle at var(--mx) var(--my),
+                                rgba(255, 255, 255, 0.06),
+                                rgba(255, 255, 255, 0) 45%);
+    opacity: 0; transition: opacity 220ms var(--e-out);
+    border-radius: inherit;
+  }
+  .card:hover::after { opacity: 1; }
+
+  @keyframes cardFloat {
+    from { opacity: 0; transform: perspective(1400px) translateZ(-30px) rotateY(-6deg); }
+    to   { opacity: 1; transform: perspective(1400px) translateZ(0) rotateY(0); }
+  }
+
+  /* --- repo chip that lives in the top-right of every card --- */
+  .card-repo {
+    position: absolute; top: 12px; right: 12px; z-index: 4;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px 6px 12px; border-radius: 999px;
+    background: rgba(15, 15, 17, 0.72);
+    border: 1px solid var(--line-1);
+    color: var(--gray-1);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    text-decoration: none; cursor: pointer;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    transition: color var(--d-2) var(--e-out),
+                border-color var(--d-2) var(--e-out),
+                background var(--d-2) var(--e-out),
+                transform var(--d-2) var(--e-out);
+  }
+  .card-repo:hover {
+    color: var(--white); border-color: var(--line-2);
+    background: rgba(24, 24, 28, 0.88);
+  }
+  .card-repo:active { transform: scale(0.96); }
+  .card-repo .arr { font-size: 12px; line-height: 1; }
+
+  /* --- custom slim scroll indicator at the bottom edge --- */
+  .scroll-track {
+    position: fixed; left: max(20px, min(420px, 34vw) - 40px);
+    right: 20px; bottom: 12px; height: 3px;
+    background: rgba(255, 255, 255, 0.06); border-radius: 99px;
+    z-index: 6; pointer-events: none;
+  }
+  .scroll-thumb {
+    position: absolute; top: 0; height: 100%;
+    background: linear-gradient(90deg, var(--gray-2), var(--white));
+    border-radius: 99px; width: 20%;
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.25);
+    transition: opacity 320ms var(--e-out);
+  }
+
+  /* --- discoverability hint: right-arrow chip that fades on first scroll --- */
   .scroll-hint {
     position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
     z-index: 10; color: var(--gray-2); font-family: "IBM Plex Mono", monospace;
@@ -85,17 +191,22 @@
   @media (prefers-reduced-motion: reduce) {
     html, body { scroll-behavior: auto; }
     .scroll-hint { animation: none; }
+    .card { transition: none; animation: none; }
+    .card::after { transition: none; }
   }
 
-  /* Restore vertical-flow layout on very narrow screens (mobile portrait)
-     where a horizontal filmstrip fights the small viewport. */
+  /* --- mobile: fall back to vertical stack --- */
   @media (max-width: 640px) {
-    html, body { overflow-x: hidden; overflow-y: auto; height: auto; }
+    html, body { overflow-x: hidden; overflow-y: auto; height: auto; scrollbar-width: auto; -ms-overflow-style: auto; }
+    html::-webkit-scrollbar, body::-webkit-scrollbar { display: initial; width: 8px; height: 8px; }
     body { flex-direction: column; padding: var(--s-6) var(--s-5); }
-    .wrap { flex-direction: column; padding: 0; gap: var(--s-6); min-height: 0; }
-    .grid { flex-direction: column; }
-    .card { width: 100%; height: auto; }
-    .scroll-hint { display: none; }
+    .mast { position: static; width: 100%; height: auto; padding: 0 0 24px; background: none; text-align: center; }
+    .mast .mast-github { align-self: center; }
+    .wrap { flex-direction: column; padding: 0; gap: var(--s-6); min-height: 0; perspective: none; }
+    .grid { flex-direction: column; gap: 20px; }
+    .card { width: 100%; height: auto; --rx: 0deg !important; --ry: 0deg !important; --lift: 0 !important; }
+    .card:hover { transform: none; }
+    .scroll-hint, .scroll-track { display: none; }
   }
 </style>
 </head>
@@ -108,6 +219,7 @@
     <h1>Flashers</h1>
     <p>Flash open firmware onto the boards straight from your browser, over USB.
       No toolchain, no command line. Pick a device.</p>
+    <a class="mast-github" href="https://github.com/QWavey" target="_blank" rel="noopener">GitHub &#8599;</a>
   </header>
 
   <main class="grid">
@@ -621,78 +733,153 @@
 
   </main>
 
-  <footer class="foot">
-    <a href="https://github.com/QWavey/WebFlasher">Rubberless-Ducky repo</a>
-    <a href="https://github.com/QWavey/ESP-S3-Key-BadUSB">ESP32-S3 Key repo</a>
-    <a href="https://github.com/QWavey/ESP-32-S3-devkitc-BadUSB">ESP32-S3 DevKitC repo</a>
-    <a href="https://github.com/QWavey/ESP-Watch-BadUSB">ESP-Watch-BadUSB repo</a>
-    <a href="https://github.com/QWavey/esp32-p4-hub-keylogger">esp32-p4-hub-keylogger repo</a>
-    <a href="https://github.com/QWavey">GitHub</a>
-  </footer>
+  <!-- Global footer removed: each card carries its own "Repo ↗" chip via
+       the JS at the bottom of <body>. A GitHub link lives on the mast. -->
 
 </div>
+
+<div class="scroll-track" aria-hidden="true"><div class="scroll-thumb" id="scrollThumb"></div></div>
 
 <div class="scroll-hint" id="scrollHint"><span>scroll</span><span class="arrow">&rarr;</span></div>
 
 <script>
-// Turn vertical wheel motion into horizontal scroll on the whole page.
-// The page IS the horizontal scroll container (body has overflow-x:auto,
-// overflow-y:hidden). Two-finger touchpad horizontal (which reports as
-// deltaX) and Shift+wheel already scroll horizontally natively, so we
-// only remap the pure-vertical wheel case.
+// ----------------------------------------------------------------------
+//  Horizontal-scroll wiring, Apple-style tilt hover, per-card repo chips,
+//  and the custom slim scroll indicator at the bottom edge. Everything
+//  is confined to this file — no other JS is loaded by the hub page.
+// ----------------------------------------------------------------------
 (function () {
-  // Skip the remap on narrow viewports where we fall back to vertical flow.
   const mq = window.matchMedia('(max-width: 640px)');
-
-  // Wheel delta comes in three modes: pixel (0), line (1), page (2).
-  // Line ~= 40px, page ~= viewport width; normalise everything to pixels.
-  function pxDelta(e) {
-    if (e.deltaMode === 1) return e.deltaY * 40;
-    if (e.deltaMode === 2) return e.deltaY * window.innerHeight;
-    return e.deltaY;
-  }
-
   const scroller = document.scrollingElement || document.documentElement;
+
+  // ------------------------- 1) repo chips ----------------------------
+  // Map card href → its source repo. New tiles just need one line here.
+  const REPO = {
+    './rubberless-ducky/':       'https://github.com/QWavey/WebFlasher',
+    './esp-s3-key/':             'https://github.com/QWavey/ESP-S3-Key-BadUSB',
+    './watch-badusb/':           'https://github.com/QWavey/ESP-Watch-BadUSB',
+    './esp32-s3-devkitc/':       'https://github.com/QWavey/ESP-32-S3-devkitc-BadUSB',
+    './esp32-p4-hub-keylogger/': 'https://github.com/QWavey/esp32-p4-hub-keylogger',
+  };
+  document.querySelectorAll('.card').forEach(card => {
+    const href = card.getAttribute('href');
+    const repo = REPO[href]; if (!repo) return;
+    const chip = document.createElement('span');
+    chip.className = 'card-repo';
+    chip.setAttribute('role', 'link');
+    chip.setAttribute('tabindex', '0');
+    chip.setAttribute('aria-label', 'Open source repo on GitHub');
+    chip.innerHTML = 'Repo <span class="arr">&#8599;</span>';
+    // A nested <a> inside the card <a> would be invalid HTML — use a
+    // span with an explicit navigation handler that stops the outer
+    // card link's default click behavior.
+    const go = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      window.open(repo, '_blank', 'noopener,noreferrer');
+    };
+    chip.addEventListener('click',     go);
+    chip.addEventListener('mousedown', e => e.stopPropagation());
+    chip.addEventListener('auxclick',  go);
+    chip.addEventListener('keydown',   e => { if (e.key === 'Enter' || e.key === ' ') go(e); });
+    card.appendChild(chip);
+  });
+
+  // ------------------------- 2) Apple tilt ----------------------------
+  // Pointer-tracked tilt with a subtle sheen. We update CSS custom
+  // properties on the card (never touch its `transform` directly) so
+  // the existing hover rules in CSS compose cleanly with the animation.
+  const MAX_TILT = 6;              // degrees at the edge of the card
+  const RESET_ON_LEAVE = true;
+  function bindTilt(card) {
+    let raf = 0, pending = null;
+    function apply() {
+      raf = 0;
+      if (!pending) return;
+      const { rx, ry, mx, my } = pending;
+      card.style.setProperty('--rx', rx + 'deg');
+      card.style.setProperty('--ry', ry + 'deg');
+      card.style.setProperty('--mx', mx + '%');
+      card.style.setProperty('--my', my + '%');
+    }
+    card.addEventListener('pointermove', (e) => {
+      if (mq.matches) return;
+      const r = card.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width;   // 0..1
+      const py = (e.clientY - r.top)  / r.height;  // 0..1
+      pending = {
+        ry: (px - 0.5) *  2 * MAX_TILT,
+        rx: (0.5 - py) *  2 * MAX_TILT,
+        mx: px * 100,
+        my: py * 100,
+      };
+      if (!raf) raf = requestAnimationFrame(apply);
+    });
+    if (RESET_ON_LEAVE) {
+      card.addEventListener('pointerleave', () => {
+        pending = { rx: 0, ry: 0, mx: 50, my: 40 };
+        if (!raf) raf = requestAnimationFrame(apply);
+      });
+    }
+  }
+  document.querySelectorAll('.card').forEach(bindTilt);
+
+  // ------------------------- 3) wheel → horizontal --------------------
+  function pxDelta(e) {
+    if (e.deltaMode === 1) return e.deltaY * 40;                    // line
+    if (e.deltaMode === 2) return e.deltaY * window.innerHeight;    // page
+    return e.deltaY;                                                // pixel
+  }
   const hint = document.getElementById('scrollHint');
   let hintDismissed = false;
-
+  function dismissHint() {
+    if (hintDismissed || !hint) return;
+    hintDismissed = true; hint.classList.add('dismissed');
+    setTimeout(() => hint.remove(), 500);
+  }
   window.addEventListener('wheel', (e) => {
     if (mq.matches) return;
-    // Native horizontal already? Let it through.
-    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-    if (e.shiftKey) return;
-    // Only remap the vertical component.
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;   // native horizontal
+    if (e.shiftKey) return;                                // native shift+wheel
     const dy = pxDelta(e);
     if (dy === 0) return;
     e.preventDefault();
     scroller.scrollLeft += dy;
-    if (!hintDismissed && hint) {
-      hintDismissed = true; hint.classList.add('dismissed');
-      setTimeout(() => hint.remove(), 500);
-    }
+    dismissHint();
   }, { passive: false });
 
-  // Dismiss the hint on ANY scroll (touchpad horizontal, keyboard, etc.)
-  window.addEventListener('scroll', () => {
-    if (!hintDismissed && hint && scroller.scrollLeft > 20) {
-      hintDismissed = true; hint.classList.add('dismissed');
-      setTimeout(() => hint.remove(), 500);
-    }
-  }, { passive: true });
-
-  // Keyboard arrow keys: PageDown/Space nudge right, PageUp/Shift+Space left.
+  // ------------------------- 4) keyboard nav --------------------------
   window.addEventListener('keydown', (e) => {
     if (mq.matches) return;
     if (e.target && ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
     const step = window.innerWidth * 0.8;
-    let dx = 0;
-    if (e.key === 'ArrowRight' || e.key === 'PageDown') dx = step;
-    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') dx = -step;
-    else if (e.key === 'Home') { e.preventDefault(); scroller.scrollTo({ left: 0 }); return; }
-    else if (e.key === 'End')  { e.preventDefault(); scroller.scrollTo({ left: scroller.scrollWidth }); return; }
+    let dx = 0, jump = null;
+    if      (e.key === 'ArrowRight' || e.key === 'PageDown') dx = step;
+    else if (e.key === 'ArrowLeft'  || e.key === 'PageUp')   dx = -step;
+    else if (e.key === 'Home') jump = 0;
+    else if (e.key === 'End')  jump = scroller.scrollWidth;
     else if (e.key === ' ')    dx = e.shiftKey ? -step : step;
-    if (dx) { e.preventDefault(); scroller.scrollBy({ left: dx, behavior: 'smooth' }); }
+    if (dx)      { e.preventDefault(); scroller.scrollBy({ left: dx, behavior: 'smooth' }); dismissHint(); }
+    if (jump !== null) { e.preventDefault(); scroller.scrollTo({ left: jump, behavior: 'smooth' }); dismissHint(); }
   });
+
+  // ------------------------- 5) custom scroll thumb -------------------
+  const thumb = document.getElementById('scrollThumb');
+  function updateThumb() {
+    if (!thumb) return;
+    const range = Math.max(1, scroller.scrollWidth - scroller.clientWidth);
+    const pct   = Math.max(0, Math.min(1, scroller.scrollLeft / range));
+    const visible = scroller.clientWidth / Math.max(scroller.scrollWidth, 1);
+    const thumbW  = Math.max(0.08, Math.min(1, visible));
+    const trackW  = 100 - thumbW * 100;
+    thumb.style.width = (thumbW * 100).toFixed(2) + '%';
+    thumb.style.left  = (pct * trackW).toFixed(2) + '%';
+  }
+  updateThumb();
+  window.addEventListener('scroll', () => {
+    updateThumb();
+    if (scroller.scrollLeft > 20) dismissHint();
+  }, { passive: true });
+  window.addEventListener('resize', updateThumb);
 })();
 </script>
 </body>
