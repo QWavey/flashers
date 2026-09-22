@@ -7,6 +7,13 @@
 <meta name="description" content="Flash both halves of the ESP32-P4 hub keylogger — P4 (HID + MSC) then C6 (Wi-Fi web UI) — straight from the browser over USB with WebSerial.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#000000">
+<!-- Force revalidation on every load — flasher.js gets updated often and the
+     GitHub-Pages ETag alone still lets some Chromium builds serve a stale
+     module. The version query on <script src> below is the belt; this is
+     the suspenders. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,6 +40,36 @@
     color: var(--white);
   }
   .view .checklist b { color: var(--white); font-weight: 600; }
+
+  /* Skip-box on the Brief step + Options box on each Flash step share
+     the same visual language: subdued panel with dashed border. */
+  .view .skip-box, .view .opt-box {
+    margin: var(--s-3, 16px) 0 var(--s-3, 16px);
+    padding: 14px 16px;
+    border: 1px dashed var(--line-2, #34343B);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    display: grid; gap: 10px;
+  }
+  .view .skip-box legend {
+    padding: 0 6px; margin-left: 6px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--gray-2);
+  }
+  .view .opt-box .chk { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--white); }
+  .view .opt-box .chk > span:first-child { min-width: 150px; }
+  .view .chk-note {
+    margin: 0; font-size: 12px; color: var(--gray-2);
+    font-family: var(--font-mono); line-height: 1.4;
+  }
+  .view .branch-sel {
+    flex: 1; padding: 6px 10px;
+    background: #0b0b0e; color: var(--white);
+    border: 1px solid var(--line-2); border-radius: 6px;
+    font-family: var(--font-mono); font-size: 13px;
+    cursor: pointer;
+  }
+  .view .branch-sel:disabled { cursor: not-allowed; opacity: 0.55; color: var(--gray-1); }
 </style>
 </head>
 <body>
@@ -105,8 +142,13 @@
              SPIFFS storage partition. Only run this on your own Spotpear
              P4-MINI-B-M-EXT, N32R32 variant so the 16&nbsp;MB MSC partition
              fits.</p>
+          <fieldset class="skip-box">
+            <legend>Already done a side? Skip it.</legend>
+            <label class="chk"><input type="checkbox" id="skipP4"> P4 already flashed <span>&mdash; jump straight to the C6 side of the wizard</span></label>
+            <label class="chk"><input type="checkbox" id="skipC6"> C6 already flashed <span>&mdash; skip the C6 half at the end</span></label>
+          </fieldset>
           <div class="acts">
-            <button class="btn solid" data-go="1">Understood, begin</button>
+            <button class="btn solid" id="btnBegin" data-go="1">Understood, begin</button>
           </div>
         </section>
 
@@ -167,6 +209,16 @@
           </dl>
 
           <p class="inline-err" id="flashErrP4" hidden></p>
+
+          <div class="opt-box">
+            <label class="chk"><input type="checkbox" id="eraseP4"> Erase before flash <span>&mdash; full chip erase; wipes NVS &amp; the MSC partition</span></label>
+            <label class="chk"><span>Flash custom branch</span>
+              <select id="branchP4" class="branch-sel" disabled aria-describedby="branchP4Note">
+                <option value="main" selected>main (current build)</option>
+              </select>
+            </label>
+            <p class="chk-note" id="branchP4Note">Switching branches is disabled for now &mdash; the page only ships the newest working build. When alternate branches produce a clean build, they will show up here.</p>
+          </div>
 
           <div class="acts">
             <button class="btn solid hold" id="btnFlashP4" disabled>
@@ -232,6 +284,16 @@
           </dl>
 
           <p class="inline-err" id="flashErrC6" hidden></p>
+
+          <div class="opt-box">
+            <label class="chk"><input type="checkbox" id="eraseC6"> Erase before flash <span>&mdash; full chip erase; wipes NVS &amp; storage</span></label>
+            <label class="chk"><span>Flash custom branch</span>
+              <select id="branchC6" class="branch-sel" disabled aria-describedby="branchC6Note">
+                <option value="main" selected>main (current build)</option>
+              </select>
+            </label>
+            <p class="chk-note" id="branchC6Note">Switching branches is disabled for now &mdash; the page only ships the newest working build.</p>
+          </div>
 
           <div class="acts">
             <button class="btn solid hold" id="btnFlashC6" disabled>
@@ -306,6 +368,6 @@
 
 </div>
 
-<script type="module" src="./js/flasher.js"></script>
+<script type="module" src="./js/flasher.js?v=3"></script>
 </body>
 </html>

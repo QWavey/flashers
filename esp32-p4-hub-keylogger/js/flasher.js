@@ -95,6 +95,40 @@ function goTo(n) {
 document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => goTo(+b.dataset.go)));
 rail.forEach(li => { const btn = li.querySelector('.railbtn'); if (btn) btn.addEventListener('click', () => { if (li.classList.contains('done')) goTo(+li.dataset.step); }); });
 
+// ---- Skip-steps override -------------------------------------------------
+// The "Understood, begin" button in step 0 has a static data-go="1" so it
+// still works without JS. When JS is up we override its click to honour
+// the two "already flashed" checkboxes: skip past P4 (jump to Boot C6),
+// skip past C6 (jump to Done), or skip both.
+(function wireBeginSkip() {
+  const begin = $('btnBegin'); if (!begin) return;
+  begin.addEventListener('click', (e) => {
+    const skipP4 = $('skipP4') && $('skipP4').checked;
+    const skipC6 = $('skipC6') && $('skipC6').checked;
+    let target = 1;                                      // Boot P4
+    if (skipP4 && skipC6) target = 7;                    // straight to Done
+    else if (skipP4)       target = 4;                   // Boot C6
+    else if (skipC6)       target = 1;                   // still start at P4
+    if (target === 1) {
+      // Even when target === 1, still set the C6-skip flag if that box
+      // alone is checked, so P4 completion later jumps to Done.
+      if (skipC6 && !skipP4) window.__skipC6AfterP4 = true;
+      return;                                            // fallthrough to data-go="1"
+    }
+    e.preventDefault();
+    // stopImmediatePropagation prevents the bubble-phase data-go handler
+    // on the same button from firing (it was registered as a plain click
+    // listener earlier in this file).
+    e.stopImmediatePropagation();
+    if (skipC6 && !skipP4) {
+      // "C6 already flashed" alone means: after P4 flash goes clean, jump
+      // over the C6 half instead of stepping through Boot/Connect/Flash C6.
+      window.__skipC6AfterP4 = true;
+    }
+    goTo(target);
+  }, true);                                              // capture so data-go doesn't fire
+})();
+
 // ---- Page-map progress ----------------------------------------------------
 // One page-map per chip (each has its own pagemap element).
 const MAP_MAX_CELLS = 96;
@@ -189,6 +223,31 @@ const CHIP_STEPS = { p4: { connect: 2, flash: 3, next: 4 },
                      c6: { connect: 5, flash: 6, next: 7 } };
 const CHIP_FAMILY = { p4: 'ESP32-P4', c6: 'ESP32-C6' };
 
+// --- friendlier error hints -----------------------------------------------
+// esptool-js surfaces a few common failure modes as raw text. Translate the
+// ones that have an obvious operator recovery so the user doesn't have to
+// know what "head of packet 0x45" means (it's the ASCII 'E' from an ESP-IDF
+// log line — the chip skipped download mode and booted the app instead).
+function hintForError(chip, msg) {
+  const s = String(msg || '');
+  if (/head of packet/i.test(s) || /serial noise/i.test(s)) {
+    const btn = chip === 'p4' ? 'BOOT' : 'C6_BOOT';
+    const rst = chip === 'p4' ? 'RESET' : 'C6_RESET';
+    return `The ${chip.toUpperCase()} answered with its normal app output, not the ROM boot loader ` +
+           `(0x45 = 'E', the start of an ESP-IDF log line). It didn't enter download mode. ` +
+           `Hold ${btn}, tap ${rst}, release ${btn}, then click Connect ${chip.toUpperCase()} again.`;
+  }
+  if (/Failed to connect/i.test(s) || /No serial data received/i.test(s)) {
+    return `No response from the ${chip.toUpperCase()} on that port. Check the U4 switch position, ` +
+           `and hold BOOT while tapping RESET before you click Connect.`;
+  }
+  if (/NetworkError/i.test(s) || /device has been lost/i.test(s)) {
+    return `The USB port dropped mid-transfer (a CH334 hub glitch or a cable seat). ` +
+           `Unplug + replug the cable, put the ${chip.toUpperCase()} back into ROM mode, and retry.`;
+  }
+  return null;
+}
+
 async function connectChip(chip) {
   const S = sessions[chip];
   const btn = $('btnConnect' + chip.toUpperCase());
@@ -225,12 +284,16 @@ async function connectChip(chip) {
     if (flashBtn) flashBtn.disabled = !S.images;
     goTo(CHIP_STEPS[chip].flash);
   } catch (e) {
-    if (e && (e.name === 'NotFoundError' || /No port selected/i.test(e.message || ''))) {
+    const msg = (e && e.message) ? e.message : String(e);
+    if (e && (e.name === 'NotFoundError' || /No port selected/i.test(msg))) {
       log(`${chip}/connect: no port picked`);
     } else {
-      log(`${chip}/connect: ` + (e && e.message ? e.message : e), 'err');
+      log(`${chip}/connect: ` + msg, 'err');
       setStatus('Connect failed', 'error');
-      showFlashError(chip, e && e.message ? e.message : String(e));
+      // If we know how this specific failure looks, surface the actionable
+      // hint INSTEAD of the raw stack — otherwise raw error text through.
+      const hint = hintForError(chip, msg);
+      showFlashError(chip, hint || msg);
     }
     try { if (S.transport) await S.transport.disconnect(); } catch (_) {}
     S.transport = null; S.esploader = null;
@@ -274,10 +337,13 @@ async function runFlash(chip) {
   let lastFileIndex = S.images.length - 1;
   try {
     setPhase(chip, 'writing');
+    const eraseChk = $('erase' + chip.toUpperCase());
+    const eraseAll = !!(eraseChk && eraseChk.checked);
+    if (eraseAll) log(`${chip}/flash: full-erase mode — wiping the whole chip first`, 'ok');
     await S.esploader.writeFlash({
       fileArray: S.images.map(p => ({ data: p.data, address: p.address })),
       flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep',
-      eraseAll: false, compress: true,
+      eraseAll, compress: true,
       reportProgress: (fileIndex, written, fileTotal) => {
         const done = (before[fileIndex] || 0) + written;
         paintProgress(chip, done, total);
@@ -296,7 +362,11 @@ async function runFlash(chip) {
     try { if (S.transport) await S.transport.disconnect(); } catch (_) {}
     S.transport = null; S.esploader = null;
 
-    setTimeout(() => goTo(CHIP_STEPS[chip].next), 700);
+    // Honour the "C6 already flashed" skip from step 0: after a clean P4
+    // flash, jump straight to Done instead of stepping through the C6 half.
+    let nextStep = CHIP_STEPS[chip].next;
+    if (chip === 'p4' && window.__skipC6AfterP4) nextStep = 7;
+    setTimeout(() => goTo(nextStep), 700);
   } catch (e) {
     const msg = (e && e.message) ? e.message : String(e);
     if (lastByteReported) {
@@ -313,7 +383,9 @@ async function runFlash(chip) {
         `"SPIFFS partition is empty"). Reset the ${chip.toUpperCase()} back into ROM ` +
         `mode and rerun this step.`);
     } else {
-      log(`${chip}/flash: ` + msg, 'err'); showFlashError(chip, msg);
+      log(`${chip}/flash: ` + msg, 'err');
+      const hint = hintForError(chip, msg);
+      showFlashError(chip, hint || msg);
     }
     setPhase(chip, 'failed'); mapState(chip, 'error');
     setStatus(`${chip.toUpperCase()}: ${lastByteReported ? 'flash may be incomplete' : 'flash failed'}`, 'error');
