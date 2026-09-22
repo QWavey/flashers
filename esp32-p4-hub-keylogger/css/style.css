@@ -990,93 +990,167 @@ body[data-state="ok"] .fx-port > * { animation: fxseat 0.5s var(--e-apple); }
   .fx-data, .fx-pk, .fx-press, .fx-port { display:none; }
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   Mobile wizard patch (added after user reported the setup wizard
-   collapsed on Android).
+/* =====================================================================
+   MOBILE LAYOUT (v2 - user reported v1 broke overlaps and cropped rail).
+   Strategy: on narrow viewports, break out of the desktop's fixed-size
+   flexbox+grid `.stage`/`.box` model entirely. Use `display: block` on
+   the container chain so content flows top-to-bottom like a normal
+   document, page scrolls naturally. Keeps the same visuals - brand
+   header, spec pills, rail, wizard cards, footer strip - just stacked
+   for a portrait phone. Only the LAYOUT is different; typography and
+   colors match the desktop system.
+   ===================================================================== */
+@media (max-width: 720px) {
+  html, body { overflow-x: hidden; overflow-y: auto; height: auto; }
+  body { background: var(--black); }
 
-   The stock mobile rules assumed a landscape-ish 860 px viewport and
-   crammed everything into a 720 px `max-height` box with `.views` as
-   the only scrollable region. On a portrait phone that reserves ~140 px
-   for chrome + spec table and leaves ~450 px for the wizard steps — the
-   checkboxes, hold-to-flash button and branch dropdown pile up and get
-   cropped or squeezed under a nested scrollbar.
-
-   Fix: let the page itself scroll on narrow viewports instead of
-   pinning the box to the viewport, hide the internal-scroll on
-   `.views`, expand the rail to fit content, and let the `.box` grow
-   with content. Also handle the very narrow (< 480 px) case with even
-   tighter typography and margins.
-   ─────────────────────────────────────────────────────────────────── */
-@media (max-width: 860px) {
-  html, body { overflow-x: hidden; }
-  .stage { height: auto; min-height: 100svh; padding: 16px; }
-  .box  {
-    max-height: none;                        /* let the box grow */
-    grid-template-rows: auto auto auto;      /* no fixed 1fr for the body */
-    max-width: 100%;
-    border-radius: 14px;
+  .stage {
+    height: auto; min-height: 100svh; padding: 0;
+    display: block; align-items: initial; justify-content: initial;
   }
+
+  .box {
+    display: block; grid-template-rows: none;
+    max-width: none; max-height: none; min-height: 0;
+    height: auto; width: 100%;
+    border-radius: 0; border-left: 0; border-right: 0;
+    overflow: visible;
+    animation: none;
+  }
+
+  .box-top {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 10px 14px; padding: 14px 16px;
+  }
+  .brandline { font-size: 14px; }
+  .brandline .ver { display: none; }
+  .status { margin-left: auto; font-size: 12px; }
+  .backlink { padding: 6px 10px; font-size: 12px; }
+
   .box-body {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
+    display: block;
+    grid-template-columns: none; grid-template-rows: none;
   }
-  .slab {
-    grid-template-columns: 1fr;              /* stack spec below (no figure) */
-    grid-template-rows: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--line-1);
-    padding: 4px 0;
-  }
-  .spec {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    padding: 12px 16px;
-    gap: 6px 14px;
-  }
-  .spec > div { padding: 6px 0; border-top: 1px solid var(--line-1); }
-  .spec dt { font-size: 11px; }
-  .spec dd { font-size: 14px; }
 
-  .panel { grid-template-rows: auto auto; }
+  .slab {
+    display: block; grid-template-rows: none; grid-template-columns: none;
+    border-right: 0; border-bottom: 1px solid var(--line-1);
+    background: transparent;
+  }
+  .fig { display: none; }
+  .spec {
+    display: grid; grid-template-columns: 1fr;
+    margin: 0; padding: 8px 16px 12px; border-top: 0;
+  }
+  .spec > div {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 8px 0; gap: 12px; border-top: 1px solid var(--line-1);
+    border-right: 0 !important;
+  }
+  .spec > div:first-child { border-top: 0; }
+  .spec dt { font-size: 12px; color: var(--gray-2); }
+  .spec dd {
+    margin: 0; font-family: var(--font-mono); font-size: 13px;
+    font-weight: 500; color: var(--white);
+    text-align: right; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .panel {
+    display: block; grid-template-rows: none; min-height: 0;
+  }
+
   .rail {
-    padding: 12px 16px 10px; gap: 6px;
-    grid-auto-columns: minmax(0, 1fr);
-    overflow-x: auto;                        /* rail can side-scroll if many steps */
+    display: flex; flex-wrap: nowrap; gap: 8px;
+    padding: 12px 16px; border-bottom: 1px solid var(--line-1);
+    overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
     scrollbar-width: none;
+    grid-auto-flow: initial; grid-auto-columns: initial;
   }
   .rail::-webkit-scrollbar { display: none; }
-  .rail li b { display: inline; font-size: 12px; }   /* keep labels visible */
+  .rail li {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px; border: 1px solid var(--line-1);
+    border-radius: 999px; background: transparent;
+  }
+  .rail li::after { display: none; }
+  .rail li b { display: inline; font-size: 12.5px; font-weight: 500; }
+  .rail li .pip {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--gray-2); flex: none;
+  }
+  .rail li.on   { border-color: var(--accent); color: var(--accent); }
+  .rail li.on   .pip { background: var(--accent); }
+  .rail li.done { border-color: var(--line-2); color: var(--white); }
+  .rail li.done .pip { background: var(--white); }
+  .railbtn { padding: 0; margin: 0; background: none; border: none; color: inherit; font: inherit; }
 
   .views {
-    overflow: visible;                        /* page scrolls, not this box */
-    max-height: none;
-    padding: 4px 16px 20px;
+    display: block; position: static; overflow: visible;
+    padding: 0;
   }
   .view {
-    padding: 20px 4px 8px;
+    display: none !important;
+    position: static !important;
+    padding: 20px 16px 24px;
+    opacity: 1 !important; visibility: visible !important;
+    transform: none !important; transition: none !important;
   }
-  .view h1 { font-size: clamp(24px, 6vw, 32px); margin-bottom: 12px; }
-  .view p  { font-size: 14.5px; line-height: 1.5; max-width: none; }
+  .view.is-on { display: block !important; }
+  .view h1 { font-size: clamp(22px, 6.5vw, 30px); line-height: 1.15; margin: 0 0 12px; }
+  .view p  { font-size: 15px; line-height: 1.5; max-width: none; margin: 0 0 12px; }
+  .view .kicker { margin-bottom: 8px; font-size: 11px; }
+  .view .warn {
+    padding: 12px 14px; border-radius: 10px;
+    background: rgba(255, 106, 19, 0.08);
+    border: 1px solid rgba(255, 106, 19, 0.3);
+    color: var(--accent); font-size: 13.5px; line-height: 1.5;
+    margin: 12px 0;
+  }
+  .view .acts {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    margin-top: 16px;
+  }
+  .btn { font-size: 14.5px; padding: 12px 18px; min-height: 44px; }
+  .btn.hold { min-height: 56px; padding: 14px 22px; }
+  .view .checklist, .view .opt-box, .view .skip-box { margin: 14px 0; }
+  .view .opt-box .chk { flex-wrap: wrap; }
+  .view .opt-box .chk > span:first-child { min-width: 120px; }
 
-  /* Big buttons + hold-to-flash need room. Wrap actions on their own line. */
-  .view .acts { flex-wrap: wrap; gap: 10px; }
-  .btn { font-size: 14px; padding: 12px 16px; }
-  .btn.hold { min-height: 52px; }
+  .pagemap { grid-template-columns: repeat(auto-fill, minmax(18px, 1fr)); gap: 3px; }
+  .view .readout { font-size: 12px; flex-wrap: wrap; gap: 4px 10px; }
+  .mini { grid-template-columns: 1fr; }
+  .mini > div { flex-direction: row; justify-content: space-between; padding: 6px 0; }
 
-  /* Log + files drawers slide over on desktop; on mobile give them a
-     safe max-height so they don't cover the whole screen. */
-  .drawer { max-height: 60vh; }
+  .box-bot {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    padding: 14px 16px; border-top: 1px solid var(--line-1);
+    background: var(--surface-1);
+  }
+  .footstat { font-size: 11px; }
+  .botbtns { display: flex; gap: 6px; }
+  .tabbtn  { padding: 8px 12px; font-size: 12.5px; }
+
+  .drawer {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    max-height: 70svh; z-index: 100;
+    border-radius: 14px 14px 0 0;
+    border: 1px solid var(--line-2);
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.6);
+  }
+  .drawer-log { padding: 12px 16px; font-size: 12px; }
+
+  .legal    { padding: 12px 16px 20px; font-size: 11px; text-align: left; max-width: none; }
+  .noscript { margin: 10px; font-size: 13px; }
 }
 
-@media (max-width: 480px) {
-  .stage      { padding: 10px; gap: 10px; }
-  .brandline  { font-size: 14px; }
-  .box-top    { padding: 10px 14px; }
-  .box-bot    { padding: 8px 12px; }
-  .rail li b  { font-size: 11px; letter-spacing: 0.02em; }
-  .view       { padding: 16px 2px 4px; }
-  .view h1    { font-size: 22px; }
-  .view p     { font-size: 14px; }
-  .spec       { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
-  .legal      { font-size: 11px; }
+@media (max-width: 380px) {
+  .box-top   { padding: 12px 12px; gap: 8px; }
+  .spec      { padding: 6px 12px 10px; }
+  .rail      { padding: 10px 12px; }
+  .view      { padding: 16px 12px 20px; }
+  .box-bot   { padding: 12px 12px; }
+  .view h1   { font-size: 20px; }
+  .brandline { font-size: 13px; }
 }
