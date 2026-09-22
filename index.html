@@ -91,50 +91,44 @@
        lift + shadow hover (the pattern the ESP UI actually uses). */
   }
 
-  /* --- card sizing (horizontal filmstrip variant) --- */
+  /* --- card sizing (horizontal filmstrip variant) ---
+     Deliberately ONE .card block, not two, and NO `animation` on it.
+     The earlier version had a `cardFloat` animation with fill-mode:both
+     that kept `transform: scale(1)` applied at animation-cascade level,
+     which beats the JS-set inline `element.style.transform` in the
+     cascade — the Dock fisheye was being written but immediately
+     overridden by the animation's final keyframe. Not any more. */
   .card {
     position: relative;                       /* anchor for the repo chip */
     width: min(440px, 80vw); flex-shrink: 0;
     height: min(620px, 80vh);
     grid-template-rows: 1fr auto;
-    /* Reset the vertical-grid card animations that fought with the tilt. */
-    animation: cardFloat 700ms cubic-bezier(0.28,0.11,0.32,1) both;
-    transform-style: preserve-3d;
-    transform-origin: 50% 50%;
-    transition:
-      transform 320ms cubic-bezier(0.4, 0, 0.2, 1),
-      box-shadow 320ms cubic-bezier(0.4, 0, 0.2, 1),
-      filter 320ms cubic-bezier(0.4, 0, 0.2, 1),
-      border-color 220ms var(--e-out),
-      background 220ms var(--e-out);
-  }
-  .card .art { flex: 1; min-height: 0; overflow: hidden; }
-
-  /* Card transform + shadow are driven from JS (the Dock fisheye scale
-     below). CSS supplies only the STATIC hover polish — border colour,
-     background tint, box-shadow lift — which the browser can transition
-     independently at 60 fps without interfering with the JS-driven
-     scale. `transform` is applied inline by the JS every frame; the
-     `transition` here does NOT list `transform` on purpose. */
-  .card {
-    transform: scale(1);
     z-index: 1;
+    /* Cancel the .card { animation: cardIn } rule from the shared
+       css/style.css. That animation's final keyframe has
+       `transform: none` with fill-mode:both, which was overriding the
+       JS-set inline transform at the CSS animation cascade level. */
+    animation: none !important;
+    /* JS writes element.style.transform every frame; do NOT list
+       transform in the CSS transition and do NOT set it from a keyframe
+       animation. The transition is for hover polish only. */
+    transition:
+      box-shadow 320ms cubic-bezier(0.4, 0, 0.2, 1),
+      filter     320ms cubic-bezier(0.4, 0, 0.2, 1),
+      border-color 220ms var(--e-out),
+      background   220ms var(--e-out);
+    will-change: transform;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     outline: none;
-    /* Firefox tags the transform with a `will-change` implicitly when we
-       write to it every frame; declare it anyway so Chrome + Safari
-       promote the card to its own compositor layer up front. */
-    will-change: transform;
   }
+  .card .art { flex: 1; min-height: 0; overflow: hidden; }
   .card:focus { outline: none; }
   .card:focus-visible {
     outline: 2px solid rgba(255, 255, 255, 0.5);
     outline-offset: 4px;
   }
-  /* CSS hover state — border/background/shadow only. The Dock scale is
-     JS. Two things compose cleanly because the transitioned CSS
-     properties never touch `transform`. */
+  /* Hover polish — no transform here. JS drives the scale. */
   .card:hover {
     border-color: rgba(255, 255, 255, 0.4);
     background: #14141a;
@@ -171,25 +165,10 @@
     will-change: transform, opacity;
   }
   .cursor-light.on { opacity: 1; }
-  /* Subtle cursor-tracked highlight sheen — softer than before so it
-     reads as a light, not a spotlight. --mx / --my come from the JS
-     pointermove handler on the card. */
-  .card::after {
-    content: "";
-    position: absolute; inset: 0; pointer-events: none;
-    background: radial-gradient(400px circle at var(--mx) var(--my),
-                                rgba(255, 255, 255, 0.05),
-                                rgba(255, 255, 255, 0) 55%);
-    opacity: 0; transition: opacity 240ms cubic-bezier(0.4, 0, 0.2, 1);
-    border-radius: inherit;
-    mix-blend-mode: screen;
-  }
-  .card:hover::after { opacity: 1; }
-
-  @keyframes cardFloat {
-    from { opacity: 0; transform: translateY(20px) scale(0.98); }
-    to   { opacity: 1; transform: translateY(0)    scale(1); }
-  }
+  /* (Removed the per-card ::after sheen and the cardFloat keyframes.
+     The global .cursor-light spotlight above supplies the highlight,
+     and the JS Dock fisheye drives the scale — the ::after and the
+     keyframe animation only fought with them.) */
 
   /* --- repo chip that lives in the top-right of every card --- */
   .card-repo {
@@ -933,7 +912,12 @@
       }
       // Lerp for that liquid Dock feel.
       s.current += (s.target - s.current) * CARD_LERP;
-      s.el.style.transform = `scale(${s.current.toFixed(4)})`;
+      // setProperty with priority "important" bumps the inline style
+      // to important-inline, which beats CSS animations and the shared
+      // css/style.css in the cascade. Belt + suspenders after the
+      // `animation: cardFloat both` override that hid the whole effect
+      // in v1.
+      s.el.style.setProperty('transform', `scale(${s.current.toFixed(4)})`, 'important');
       // A card that grew past ~1.05 wants to be on top of its siblings.
       s.el.style.zIndex = s.current > 1.05 ? '3' : '1';
     }
