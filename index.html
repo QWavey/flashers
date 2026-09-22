@@ -25,8 +25,9 @@
     overflow-x: auto; overflow-y: hidden;
     height: 100vh; height: 100svh;
     scroll-behavior: smooth;
-    /* Hide the stock scrollbars — a custom slim progress indicator sits
-       at the bottom edge instead (see .scroll-track / .scroll-thumb). */
+    /* Hide the stock scrollbars entirely. A pulsing arrow-in-circle hint
+       on the right edge (see .scroll-hint) tells the user the page scrolls
+       sideways — cleaner than a bar that people try to drag and can't. */
     scrollbar-width: none;      /* Firefox */
     -ms-overflow-style: none;   /* Old IE / Edge */
   }
@@ -59,22 +60,26 @@
   .mast .mast-github:hover { color: var(--white); border-color: var(--line-2); }
 
   /* --- .wrap becomes the horizontal filmstrip; left-padded to clear the
-         fixed mast, right-padded so the last card has breathing room --- */
+         fixed mast, right-padded so the last card has breathing room ---
+         NOTE: perspective MUST NOT live on .wrap. Per CSS spec, `perspective`
+         on an ancestor creates a new containing block for `position: fixed`
+         descendants — the mast (which is inside .wrap) was then positioning
+         itself relative to .wrap and scrolling horizontally with the cards
+         instead of staying pinned to the viewport. Perspective now lives on
+         .grid so only the cards get the 3D reference frame. */
   .wrap {
     max-width: none; width: auto;
     display: flex; flex-direction: row; align-items: center;
     gap: 32px; padding: 48px 96px 48px calc(min(420px, 34vw) + 32px);
     min-height: 100vh;
-    /* Give every card the same 3D reference frame so the Apple-style
-       tilt below rotates in a consistent perspective. */
-    perspective: 1400px;
-    perspective-origin: center center;
   }
 
   .grid {
     display: flex; flex-direction: row; gap: 32px;
     grid-template-columns: none;
     flex-shrink: 0;
+    perspective: 1400px;
+    perspective-origin: center center;
   }
 
   /* --- card sizing (horizontal filmstrip variant) --- */
@@ -158,35 +163,28 @@
   .card-repo:active { transform: scale(0.96); }
   .card-repo .arr { font-size: 12px; line-height: 1; }
 
-  /* --- custom slim scroll indicator at the bottom edge --- */
-  .scroll-track {
-    position: fixed; left: max(20px, min(420px, 34vw) - 40px);
-    right: 20px; bottom: 12px; height: 3px;
-    background: rgba(255, 255, 255, 0.06); border-radius: 99px;
-    z-index: 6; pointer-events: none;
-  }
-  .scroll-thumb {
-    position: absolute; top: 0; height: 100%;
-    background: linear-gradient(90deg, var(--gray-2), var(--white));
-    border-radius: 99px; width: 20%;
-    box-shadow: 0 0 12px rgba(255, 255, 255, 0.25);
-    transition: opacity 320ms var(--e-out);
-  }
-
-  /* --- discoverability hint: right-arrow chip that fades on first scroll --- */
+  /* --- scroll-hint: arrow-in-circle at the right edge, pulses toward the
+     right; fades on first scroll and dismounts. The old thin scroll-thumb
+     at the bottom is gone — it read as a broken control since it moved
+     but users kept trying to drag it. --- */
   .scroll-hint {
     position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
-    z-index: 10; color: var(--gray-2); font-family: "IBM Plex Mono", monospace;
-    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
-    display: flex; align-items: center; gap: 8px;
-    pointer-events: none; opacity: 0.7;
-    animation: hintPulse 2.4s ease-in-out infinite;
+    z-index: 10;
+    width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(15, 15, 17, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: rgba(245, 245, 247, 0.92);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+    animation: hintPulse 2s cubic-bezier(0.28, 0.11, 0.32, 1) infinite;
   }
-  .scroll-hint.dismissed { opacity: 0; transition: opacity .4s ease; }
-  .scroll-hint .arrow { font-size: 18px; }
+  .scroll-hint svg { width: 22px; height: 22px; display: block; }
+  .scroll-hint.dismissed { opacity: 0; transition: opacity .35s ease; }
   @keyframes hintPulse {
-    0%, 100% { transform: translateY(-50%) translateX(0); }
-    50%      { transform: translateY(-50%) translateX(6px); }
+    0%, 100% { transform: translateY(-50%) translateX(0);   box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.8); }
+    50%      { transform: translateY(-50%) translateX(6px); box-shadow: 0 12px 28px -8px rgba(255, 255, 255, 0.18); }
   }
   @media (prefers-reduced-motion: reduce) {
     html, body { scroll-behavior: auto; }
@@ -206,7 +204,7 @@
     .grid { flex-direction: column; gap: 20px; }
     .card { width: 100%; height: auto; --rx: 0deg !important; --ry: 0deg !important; --lift: 0 !important; }
     .card:hover { transform: none; }
-    .scroll-hint, .scroll-track { display: none; }
+    .scroll-hint { display: none; }
   }
 </style>
 </head>
@@ -738,9 +736,12 @@
 
 </div>
 
-<div class="scroll-track" aria-hidden="true"><div class="scroll-thumb" id="scrollThumb"></div></div>
-
-<div class="scroll-hint" id="scrollHint"><span>scroll</span><span class="arrow">&rarr;</span></div>
+<div class="scroll-hint" id="scrollHint" aria-hidden="true">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 12h14"/>
+    <path d="M13 5l7 7-7 7"/>
+  </svg>
+</div>
 
 <script>
 // ----------------------------------------------------------------------
@@ -862,24 +863,10 @@
     if (jump !== null) { e.preventDefault(); scroller.scrollTo({ left: jump, behavior: 'smooth' }); dismissHint(); }
   });
 
-  // ------------------------- 5) custom scroll thumb -------------------
-  const thumb = document.getElementById('scrollThumb');
-  function updateThumb() {
-    if (!thumb) return;
-    const range = Math.max(1, scroller.scrollWidth - scroller.clientWidth);
-    const pct   = Math.max(0, Math.min(1, scroller.scrollLeft / range));
-    const visible = scroller.clientWidth / Math.max(scroller.scrollWidth, 1);
-    const thumbW  = Math.max(0.08, Math.min(1, visible));
-    const trackW  = 100 - thumbW * 100;
-    thumb.style.width = (thumbW * 100).toFixed(2) + '%';
-    thumb.style.left  = (pct * trackW).toFixed(2) + '%';
-  }
-  updateThumb();
+  // ------------------------- 5) dismiss hint on any scroll ------------
   window.addEventListener('scroll', () => {
-    updateThumb();
     if (scroller.scrollLeft > 20) dismissHint();
   }, { passive: true });
-  window.addEventListener('resize', updateThumb);
 })();
 </script>
 </body>
