@@ -30,15 +30,15 @@
   html {
     height: 100vh; height: 100svh;
     overflow: hidden;
-    /* Kill Android/Chrome's blue tap-highlight on any element the user
-       taps. Applied at the root so it covers cards, the mast GitHub
-       chip, the scroll-hint button and every future clickable. */
     -webkit-tap-highlight-color: transparent;
   }
   * { -webkit-tap-highlight-color: transparent; }
   body {
     overflow-x: auto; overflow-y: hidden;
     height: 100vh; height: 100svh;
+    /* Native smooth-scroll — makes mouse-wheel scroll not feel like a
+       teleport. Native implementation, no JS RAF loop that could get
+       stuck in a weird state (my previous accumulator did). */
     scroll-behavior: smooth;
     scrollbar-width: none;      /* Firefox */
     -ms-overflow-style: none;   /* IE / old Edge */
@@ -198,10 +198,13 @@
      right; fades on first scroll and dismounts. The old thin scroll-thumb
      at the bottom is gone — it read as a broken control since it moved
      but users kept trying to drag it. --- */
-  /* Real button (not a div) so the browser gives us keyboard focus,
-     Enter-to-activate, and the correct semantics for AT users. */
+  /* Two mirror hints — one on the right, one on the left. Only the
+     right one shows at page load (jump-to-end). Once the user is at or
+     near the right edge, the right hint fades out and the left one
+     fades in (jump-back-to-start). Real <button>s so we get focus,
+     Enter-to-activate, and correct AT semantics. */
   .scroll-hint {
-    position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
+    position: fixed; top: 50%;
     z-index: 10;
     width: 56px; height: 56px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
@@ -212,20 +215,28 @@
     box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.8);
     cursor: pointer;
     padding: 0;
-    animation: hintPulse 2s cubic-bezier(0.28, 0.11, 0.32, 1) infinite;
+    opacity: 0; pointer-events: none;                 /* start hidden */
     transition: opacity .35s ease;
+    transform: translateY(-50%);
   }
+  .scroll-hint.right { right: 24px; animation: hintPulseR 2s cubic-bezier(0.28, 0.11, 0.32, 1) infinite; }
+  .scroll-hint.left  { left:  24px; animation: hintPulseL 2s cubic-bezier(0.28, 0.11, 0.32, 1) infinite; }
+  .scroll-hint.on { opacity: 1; pointer-events: auto; }
   .scroll-hint:hover {
     background: rgba(28, 28, 32, 0.86);
     border-color: rgba(255, 255, 255, 0.4);
     color: #fff;
   }
-  .scroll-hint:active { transform: translateY(-50%) scale(0.94); }
+  .scroll-hint.right:active { transform: translateY(-50%) scale(0.94); }
+  .scroll-hint.left:active  { transform: translateY(-50%) scale(0.94); }
   .scroll-hint svg { width: 22px; height: 22px; display: block; }
-  .scroll-hint.dismissed { opacity: 0; pointer-events: none; animation: none; }
-  @keyframes hintPulse {
+  @keyframes hintPulseR {
     0%, 100% { transform: translateY(-50%) translateX(0);   box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.8); }
     50%      { transform: translateY(-50%) translateX(6px); box-shadow: 0 12px 28px -8px rgba(255, 255, 255, 0.18); }
+  }
+  @keyframes hintPulseL {
+    0%, 100% { transform: translateY(-50%) translateX(0);    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.8); }
+    50%      { transform: translateY(-50%) translateX(-6px); box-shadow: 0 12px 28px -8px rgba(255, 255, 255, 0.18); }
   }
   @media (prefers-reduced-motion: reduce) {
     html, body { scroll-behavior: auto; }
@@ -779,10 +790,16 @@
 
 </div>
 
-<button class="scroll-hint" id="scrollHint" type="button" aria-label="Scroll to end of flashers list">
+<button class="scroll-hint right" id="scrollHintRight" type="button" aria-label="Scroll to end of flashers list">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M5 12h14"/>
     <path d="M13 5l7 7-7 7"/>
+  </svg>
+</button>
+<button class="scroll-hint left" id="scrollHintLeft" type="button" aria-label="Scroll back to start of flashers list">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M19 12H5"/>
+    <path d="M11 5l-7 7 7 7"/>
   </svg>
 </button>
 
@@ -924,73 +941,68 @@
   requestAnimationFrame(tickDock);
 
   // ------------------------- 3) scroll-hint behavior ------------------
-  const hint = document.getElementById('scrollHint');
-  let hintDismissed = false;
-  const END_TOL = 24;   // px from the right edge that counts as "at end"
+  // Two mirror hints:
+  //   RIGHT: visible whenever the user is NOT at the right edge. Click
+  //          smooth-scrolls to the end.
+  //   LEFT : visible whenever the user IS at the right edge. Click
+  //          smooth-scrolls back to the start.
+  // Both live for the whole session (unlike the old one-shot design) —
+  // that way after the user goes right they always have a way back.
+  const hintR = document.getElementById('scrollHintRight');
+  const hintL = document.getElementById('scrollHintLeft');
+  const END_TOL = 24;   // px tolerance to count as "at the edge"
 
   function updateHintForPosition() {
-    if (!hint || hintDismissed) return;
-    const x = getScrollX(), max = getScrollMaxX();
-    // Hide when at/near the right edge. If they scroll back left the
-    // hint stays hidden — one-shot dismissal (matches user's ask:
-    // "when scrolled too much to right the arrow should dissapear").
-    if (max > 0 && x >= max - END_TOL) dismissHint();
+    const x   = getScrollX();
+    const max = getScrollMaxX();
+    if (max <= 0) {
+      // Nothing to scroll — hide both.
+      hintR && hintR.classList.remove('on');
+      hintL && hintL.classList.remove('on');
+      return;
+    }
+    const atRight = x >= max - END_TOL;
+    if (hintR) hintR.classList.toggle('on', !atRight);
+    if (hintL) hintL.classList.toggle('on',  atRight);
   }
-  function dismissHint() {
-    if (hintDismissed || !hint) return;
-    hintDismissed = true; hint.classList.add('dismissed');
-    setTimeout(() => hint.remove(), 500);
-  }
-  if (hint) {
-    hint.addEventListener('click', (e) => {
-      e.preventDefault();
-      scrollToX(getScrollMaxX(), true);
-      // The scroll event will fire and dismiss us; also dismiss now for
-      // touch environments where the smooth scroll can be swallowed.
-      setTimeout(dismissHint, 900);
-    });
-  }
+  if (hintR) hintR.addEventListener('click', (e) => {
+    e.preventDefault();
+    scrollToX(getScrollMaxX(), true);
+  });
+  if (hintL) hintL.addEventListener('click', (e) => {
+    e.preventDefault();
+    scrollToX(0, true);
+  });
+  // Prime state on load so the right hint is visible from the get-go.
+  requestAnimationFrame(updateHintForPosition);
 
   // ------------------------- 4) wheel → horizontal --------------------
-  // Touchpad scrolling arrives as many small deltaY values per second
-  // (~10–20 px each at 60–120 Hz) — writing scrollLeft directly is
-  // already smooth. Traditional mouse wheels emit ONE big deltaY (~100
-  // px on Windows) per notch, so a direct write jumps 100 px and looks
-  // jerky. Solution: accumulate the wheel delta into a `pending` target
-  // and lerp `body.scrollLeft` toward it in a RAF loop. Fast, small
-  // deltas (touchpad) resolve in a frame or two; big deltas (mouse
-  // wheel) glide in 4–6 frames — the classic "smooth scroll" feel.
+  // Simplest possible mapping: translate vertical wheel delta into a
+  // horizontal scroll increment on the body. CSS `scroll-behavior:
+  // smooth` on body makes the browser interpolate to that target with
+  // a proper native easing — no JS RAF accumulator needed (the previous
+  // one silently failed on some mouse setups). Touchpad users still
+  // get their fast pixel-precise horizontal via the deltaX passthrough.
   function pxDelta(e) {
     if (e.deltaMode === 1) return e.deltaY * 40;                    // line
     if (e.deltaMode === 2) return e.deltaY * window.innerHeight;    // page
     return e.deltaY;                                                // pixel
   }
-  let scrollPending = 0;   // px still queued to consume
-  let scrollRAF = 0;
-  const SCROLL_LERP = 0.30;   // per-frame catch-up fraction
-  function tickScroll() {
-    scrollRAF = 0;
-    if (Math.abs(scrollPending) < 0.5) { scrollPending = 0; return; }
-    const step = scrollPending * SCROLL_LERP;
-    sc.scrollLeft += step;
-    scrollPending -= step;
-    if (Math.abs(scrollPending) > 0.5) scrollRAF = requestAnimationFrame(tickScroll);
-    updateHintForPosition();
-  }
   window.addEventListener('wheel', (e) => {
     if (mq.matches) return;
-    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;   // native horizontal
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;   // native horizontal — passthrough
     if (e.shiftKey) return;                                // native shift+wheel
     const dy = pxDelta(e);
     if (dy === 0) return;
     e.preventDefault();
-    scrollPending += dy;
-    // Clamp so we never over-scroll and then bounce back.
-    const cur = sc.scrollLeft;
-    const max = getScrollMaxX();
-    if (cur + scrollPending < 0)   scrollPending = -cur;
-    if (cur + scrollPending > max) scrollPending = max - cur;
-    if (!scrollRAF) scrollRAF = requestAnimationFrame(tickScroll);
+    // Write to both — Chromium picks body, Firefox picks documentElement
+    // (they disagree about who's the scroll owner even after our
+    // overflow-only-on-body setup).
+    const cur    = sc.scrollLeft || document.documentElement.scrollLeft || 0;
+    const target = Math.max(0, Math.min(getScrollMaxX(), cur + dy));
+    sc.scrollLeft = target;
+    document.documentElement.scrollLeft = target;
+    updateHintForPosition();
   }, { passive: false });
 
   // ------------------------- 5) keyboard nav --------------------------
@@ -1012,9 +1024,7 @@
   // Fire on either the body (our scroll container) or the window (for
   // the html-hidden-body-scrolls setup, scroll events go on body). Both
   // covered so we never miss updates.
-  function onScroll() {
-    if (!hintDismissed && getScrollX() > 20) updateHintForPosition();
-  }
+  function onScroll() { updateHintForPosition(); }
   document.body.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('scroll', onScroll, { passive: true });
 })();
