@@ -21,27 +21,26 @@
      Shift+wheel pass through unchanged. On phones (<640px) it falls back
      to a vertical stack. */
 
-  /* Only put overflow on <html> — that pins the scroll container to a
-     single element so `document.scrollingElement` and `window.scrollBy`
-     are unambiguous and mouse-wheel remap actually moves the viewport.
-     Setting overflow on BOTH html and body confuses the browser about
-     which owns the scroll (Chromium picks body, Firefox picks html) and
-     was the reason vertical wheel wasn't translating to horizontal on
-     desktop. */
+  /* Make <body> the scroll container (not <html>). Chromium in particular
+     defers to whichever element gets explicit overflow AND has content
+     wider than the viewport; when both got overflow-x:auto, one of them
+     ended up as the actual scroller and window.scrollBy wrote to the
+     wrong one, so mouse-wheel remap never moved the view. Now body is
+     unambiguously the scroller and the JS writes to body.scrollLeft. */
   html {
+    height: 100vh; height: 100svh;
+    overflow: hidden;
+  }
+  body {
     overflow-x: auto; overflow-y: hidden;
     height: 100vh; height: 100svh;
     scroll-behavior: smooth;
     scrollbar-width: none;      /* Firefox */
-    -ms-overflow-style: none;   /* Old IE / Edge */
-  }
-  html::-webkit-scrollbar { width: 0; height: 0; display: none; }
-  body {
-    overflow: visible;
-    height: 100vh; height: 100svh;
+    -ms-overflow-style: none;   /* IE / old Edge */
     flex-direction: row; align-items: stretch;
     padding: 0; gap: 0;
   }
+  body::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
   /* --- fixed mast on the left, does NOT scroll with the cards --- */
   .mast {
@@ -106,22 +105,50 @@
   }
   .card .art { flex: 1; min-height: 0; overflow: hidden; }
 
-  /* Simple, Apple-style LIFT hover — the same pattern the ESP UI's
-     buttons use (translateY + shadow + brightness). No 3D tilt, no
-     cursor-tracked sheen — those looked flashy but the user found
-     them subtle to the point of invisible on this card size. */
+  /* Apple-style hover — one card grows noticeably bigger and lifts, and
+     its siblings dim + shrink slightly. Same pattern as the macOS Dock:
+     you can feel which one you're pointing at.
+
+     `.grid:has(.card:hover) .card` targets ALL siblings when any card is
+     hovered, so we set the "un-hovered" state there; then `.card:hover`
+     wins for the one actually being pointed at. */
   .card {
     --mx: 50%; --my: 40%;
     transform: translateY(0) scale(1);
-    will-change: transform, box-shadow;
+    will-change: transform, box-shadow, filter, opacity;
   }
-  .card:hover {
-    transform: translateY(-8px) scale(1.015);
-    border-color: rgba(255, 255, 255, 0.28);
+  /* When ANY card is hovered inside the row, the not-hovered ones dim
+     and shrink a hair. `:has()` is supported everywhere the flashers
+     run (Chrome 105+, Edge 105+, Safari 15.4+); we only need a decent
+     hover story on desktop. */
+  .grid:has(.card:hover) .card {
+    opacity: 0.62;
+    transform: translateY(0) scale(0.97);
+    filter: saturate(0.85);
+  }
+  .grid:has(.card:hover) .card:hover {
+    opacity: 1;
+    transform: translateY(-12px) scale(1.06);
+    filter: saturate(1) brightness(1.08);
+    border-color: rgba(255, 255, 255, 0.35);
+    background: #131318;
     box-shadow:
-      0 24px 50px -18px rgba(0, 0, 0, 0.85),
-      0 0 0 1px rgba(255, 255, 255, 0.06) inset;
-    filter: brightness(1.06);
+      0 30px 60px -20px rgba(0, 0, 0, 0.9),
+      0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+      0 0 48px -12px rgba(255, 255, 255, 0.12);
+    z-index: 2;
+  }
+  /* Fallback for browsers without :has() — plain lift, no sibling dim. */
+  @supports not selector(:has(*)) {
+    .card:hover {
+      transform: translateY(-12px) scale(1.06);
+      border-color: rgba(255, 255, 255, 0.35);
+      background: #131318;
+      filter: brightness(1.08);
+      box-shadow:
+        0 30px 60px -20px rgba(0, 0, 0, 0.9),
+        0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+    }
   }
   /* Subtle cursor-tracked highlight sheen — softer than before so it
      reads as a light, not a spotlight. --mx / --my come from the JS
@@ -209,9 +236,10 @@
 
   /* --- mobile: fall back to vertical stack --- */
   @media (max-width: 640px) {
-    html { overflow-x: hidden; overflow-y: auto; height: auto; scrollbar-width: auto; -ms-overflow-style: auto; }
-    body { overflow: visible; height: auto; }
-    html::-webkit-scrollbar { display: initial; width: 8px; height: 8px; }
+    html { overflow: visible; height: auto; }
+    body { overflow-x: hidden; overflow-y: auto; height: auto;
+           scrollbar-width: auto; -ms-overflow-style: auto; }
+    body::-webkit-scrollbar { display: initial; width: 8px; height: 8px; }
     body { flex-direction: column; padding: var(--s-6) var(--s-5); }
     .mast { position: static; width: 100%; height: auto; padding: 0 0 24px; background: none; text-align: center; }
     .mast .mast-github { align-self: center; }
@@ -773,34 +801,23 @@
 (function () {
   const mq = window.matchMedia('(max-width: 640px)');
 
-  // ------------------------- scroll target detection ------------------
-  // With overflow-x: auto on BOTH <html> and <body>, exactly one of the
-  // two actually owns the scroll (browser-dependent). We compute it once
-  // and then always write to that element AND fall back to window.scrollBy
-  // — the redundancy costs nothing and covers Firefox/Chromium
-  // differences plus edge cases where scrollingElement lies.
-  function getScrollX()      { return window.scrollX || document.scrollingElement.scrollLeft || document.documentElement.scrollLeft || document.body.scrollLeft; }
-  function getScrollMaxX()   {
-    const de = document.documentElement, b = document.body;
-    return Math.max(
-      de.scrollWidth - de.clientWidth,
-      b.scrollWidth  - b.clientWidth,
-      0
-    );
-  }
+  // ------------------------- scroll target -----------------------------
+  // <body> is now the scroll container (html has overflow: hidden), so
+  // body.scrollLeft is authoritative on every browser. We still write to
+  // documentElement.scrollLeft as a defensive fallback; it's a no-op on
+  // html-hidden setups.
+  const sc = document.body;
+  function getScrollX()    { return sc.scrollLeft || document.documentElement.scrollLeft || 0; }
+  function getScrollMaxX() { return Math.max(sc.scrollWidth - sc.clientWidth, 0); }
   function scrollByX(dx, smooth) {
-    // Try every plausible scroller so we don't care which one owns the
-    // scroll. `window.scrollBy` is the authoritative call in modern
-    // browsers; the direct property writes are the belt-and-suspenders.
-    try { window.scrollBy({ left: dx, behavior: smooth ? 'smooth' : 'auto' }); } catch (_) {}
-    // These are no-ops on whichever element doesn't own the scroll.
-    document.documentElement.scrollLeft += dx;
-    document.body.scrollLeft += dx;
+    if (smooth && sc.scrollBy) { sc.scrollBy({ left: dx, behavior: 'smooth' }); }
+    else { sc.scrollLeft += dx; }
+    document.documentElement.scrollLeft += dx;   // fallback, no-op if body owns scroll
   }
   function scrollToX(x, smooth) {
-    try { window.scrollTo({ left: x, behavior: smooth ? 'smooth' : 'auto' }); } catch (_) {}
+    if (smooth && sc.scrollTo) { sc.scrollTo({ left: x, behavior: 'smooth' }); }
+    else { sc.scrollLeft = x; }
     document.documentElement.scrollLeft = x;
-    document.body.scrollLeft = x;
   }
 
   // ------------------------- 1) repo chips ----------------------------
@@ -919,14 +936,15 @@
     if (jump !== null) { e.preventDefault(); scrollToX(jump, true); }
   });
 
-  // ------------------------- 6) unified scroll listener --------------
-  // Listens on window; the browser fires here regardless of which of
-  // html/body actually owns the scroll.
-  window.addEventListener('scroll', () => {
-    // First-scroll dismissal — moving away from the far left retires the
-    // hint. Also handles the "near end" case above.
+  // ------------------------- 6) scroll listeners ----------------------
+  // Fire on either the body (our scroll container) or the window (for
+  // the html-hidden-body-scrolls setup, scroll events go on body). Both
+  // covered so we never miss updates.
+  function onScroll() {
     if (!hintDismissed && getScrollX() > 20) updateHintForPosition();
-  }, { passive: true });
+  }
+  document.body.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('scroll', onScroll, { passive: true });
 })();
 </script>
 </body>
