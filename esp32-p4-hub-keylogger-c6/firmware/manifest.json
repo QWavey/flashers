@@ -1,0 +1,28 @@
+{
+  "name": "ESP32-P4 KeyLogger \u2014 C6 firmware",
+  "version": "WebFlasher",
+  "chip": "ESP32-C6",
+  "flashSize": "keep",
+  "parts": [
+    {
+      "path": "bootloader.bin",
+      "offset": 0,
+      "size": 22176
+    },
+    {
+      "path": "partition-table.bin",
+      "offset": 32768,
+      "size": 3072
+    },
+    {
+      "path": "app.bin",
+      "offset": 65536,
+      "size": 1014000
+    },
+    {
+      "path": "storage.bin",
+      "offset": 2097152,
+      "size": 2097152
+    }
+  ]
+}
