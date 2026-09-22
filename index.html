@@ -110,79 +110,65 @@
   }
   .card .art { flex: 1; min-height: 0; overflow: hidden; }
 
-  /* Apple-style hover — one card grows noticeably bigger and lifts, and
-     its siblings dim + shrink slightly. Same pattern as the macOS Dock:
-     you can feel which one you're pointing at. */
+  /* Card transform + shadow are driven from JS (the Dock fisheye scale
+     below). CSS supplies only the STATIC hover polish — border colour,
+     background tint, box-shadow lift — which the browser can transition
+     independently at 60 fps without interfering with the JS-driven
+     scale. `transform` is applied inline by the JS every frame; the
+     `transition` here does NOT list `transform` on purpose. */
   .card {
-    --mx: 50%; --my: 40%;
-    transform: translateY(0) scale(1);
-    will-change: transform, box-shadow, filter, opacity;
-    /* Kill the flash of blue Android/Chrome paints on tap. */
+    transform: scale(1);
+    z-index: 1;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     outline: none;
+    /* Firefox tags the transform with a `will-change` implicitly when we
+       write to it every frame; declare it anyway so Chrome + Safari
+       promote the card to its own compositor layer up front. */
+    will-change: transform;
   }
   .card:focus { outline: none; }
   .card:focus-visible {
     outline: 2px solid rgba(255, 255, 255, 0.5);
     outline-offset: 4px;
   }
-  /* :has() sibling dim — Chrome 105+/Safari 15.4+/Edge 105+. */
-  .grid:has(.card:hover) .card {
-    opacity: 0.55;
-    transform: translateY(0) scale(0.96);
-    filter: saturate(0.8);
-  }
-  .grid:has(.card:hover) .card:hover {
-    opacity: 1;
-    transform: translateY(-16px) scale(1.10);
-    filter: saturate(1) brightness(1.10);
+  /* CSS hover state — border/background/shadow only. The Dock scale is
+     JS. Two things compose cleanly because the transitioned CSS
+     properties never touch `transform`. */
+  .card:hover {
     border-color: rgba(255, 255, 255, 0.4);
     background: #14141a;
+    filter: brightness(1.10);
     box-shadow:
       0 40px 70px -20px rgba(0, 0, 0, 0.95),
       0 0 0 1px rgba(255, 255, 255, 0.10) inset,
       0 0 60px -12px rgba(255, 255, 255, 0.15);
     z-index: 2;
   }
-  /* Fallback for browsers without :has() — plain grow, no sibling dim. */
-  @supports not selector(:has(*)) {
-    .card:hover {
-      transform: translateY(-16px) scale(1.10);
-      border-color: rgba(255, 255, 255, 0.4);
-      background: #14141a;
-      filter: brightness(1.10);
-      box-shadow:
-        0 40px 70px -20px rgba(0, 0, 0, 0.95),
-        0 0 0 1px rgba(255, 255, 255, 0.10) inset,
-        0 0 60px -12px rgba(255, 255, 255, 0.15);
-    }
-  }
 
-  /* Global cursor-following spotlight. One element, fixed to viewport,
-     tracks the mouse smoothly with a CSS transition — so as the cursor
-     moves BETWEEN cards, the light smoothly slides across from one to
-     the next instead of "resetting" per card. Mix-blend-mode: soft-light
-     makes it visible on cards but effectively invisible on the black
-     background, so it looks like a spotlight lifting off card art. */
+  /* Global cursor-following spotlight. NO CSS transition on transform —
+     the previous version had `transition: transform 200ms` which was
+     literally the lag the user was seeing (the light was easing toward
+     the target instead of following live). JS sets transform directly
+     every animation frame from the last known pointer position, so the
+     light stays glued to the cursor. */
   .cursor-light {
     position: fixed; pointer-events: none;
     left: 0; top: 0; width: 520px; height: 520px; margin: -260px;
     border-radius: 50%;
     background: radial-gradient(
       circle at center,
-      rgba(255, 255, 255, 0.18),
-      rgba(255, 255, 255, 0.05) 30%,
+      rgba(255, 255, 255, 0.20),
+      rgba(255, 255, 255, 0.06) 30%,
       rgba(255, 255, 255, 0) 65%
     );
     z-index: 3;
     opacity: 0;
     mix-blend-mode: soft-light;
-    transform: translate3d(0, 0, 0);
-    transition:
-      transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 320ms ease;
-    will-change: transform;
+    transform: translate3d(-9999px, -9999px, 0);
+    /* Only opacity transitions (fade in/out); position is live. */
+    transition: opacity 240ms ease;
+    will-change: transform, opacity;
   }
   .cursor-light.on { opacity: 1; }
   /* Subtle cursor-tracked highlight sheen — softer than before so it
@@ -883,32 +869,80 @@
     card.appendChild(chip);
   });
 
-  // ------------------------- 2) global cursor spotlight ---------------
-  // One spotlight element that follows the mouse across the whole page.
-  // Because it's a single fixed element with a CSS transform transition,
-  // it smoothly slides from one card to the next as the pointer crosses
-  // the gap between them — no per-card "reset" flicker.
+  // ------------------------- 2) Dock fisheye + spotlight --------------
+  // Ported from ESP-S3-Key-BadUSB/Website [ESP SD]/script.js
+  // (initMacosDock). Each card's scale is a function of pointer distance
+  // to its centre — the closest card scales up the most, adjacent cards
+  // scale up less, all others stay at 1. A velocity dampener knocks the
+  // effect back when the pointer is moving fast, so a swipe across the
+  // row doesn't leave a trail of half-scaled cards. Smoothed with a
+  // per-card lerp toward the target scale each RAF frame.
+  const CARD_MAX_SCALE = 1.14;     // biggest card scale at zero distance
+  const CARD_MAX_DIST  = 260;      // px from card centre before scale = 1
+  const CARD_LERP      = 0.22;     // per-frame catch-up factor
+  const cardStates = Array.from(document.querySelectorAll('.card')).map(el => ({
+    el, current: 1, target: 1, rect: null,
+  }));
+  let mouseX = 0, mouseY = 0, mouseIn = false;
+  let lastMX = 0, lastMY = 0, lastMT = 0, velocity = 0;
+
+  // Global cursor spotlight — no CSS transition on transform, so it
+  // stays glued to the pointer. Position is applied in the same RAF
+  // loop as the fisheye so both stay in sync.
   const light = document.createElement('div');
   light.className = 'cursor-light';
   light.setAttribute('aria-hidden', 'true');
   document.body.appendChild(light);
-  let lightX = 0, lightY = 0, lightRAF = 0;
-  function paintLight() {
-    lightRAF = 0;
-    light.style.transform = `translate3d(${lightX}px, ${lightY}px, 0)`;
-  }
-  document.addEventListener('pointermove', (e) => {
-    // Only track a real pointing device (mouse / trackpad). Skip
-    // touchscreens — the spotlight is a hover metaphor.
+
+  function pointerMoved(e) {
     if (e.pointerType && e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
     if (mq.matches) return;
-    lightX = e.clientX; lightY = e.clientY;
+    const now = performance.now(), dt = now - lastMT;
+    if (dt > 0) {
+      const dx = e.clientX - lastMX, dy = e.clientY - lastMY;
+      // px/ms, smoothed with a heavy EMA so a single jittery event
+      // doesn't kill the effect but a real swipe does.
+      velocity = velocity * 0.8 + (Math.hypot(dx, dy) / dt) * 0.2;
+    }
+    lastMX = e.clientX; lastMY = e.clientY; lastMT = now;
+    mouseX = e.clientX; mouseY = e.clientY; mouseIn = true;
     if (!light.classList.contains('on')) light.classList.add('on');
-    if (!lightRAF) lightRAF = requestAnimationFrame(paintLight);
-  }, { passive: true });
-  document.addEventListener('pointerleave', () => light.classList.remove('on'));
-  window.addEventListener('blur',  () => light.classList.remove('on'));
-  window.addEventListener('focus', () => { if (!mq.matches) light.classList.add('on'); });
+  }
+  document.addEventListener('pointermove', pointerMoved, { passive: true });
+  document.addEventListener('pointerleave', () => {
+    mouseIn = false; velocity = 0;
+    light.classList.remove('on');
+  });
+  window.addEventListener('blur',  () => { mouseIn = false; light.classList.remove('on'); });
+
+  function tickDock() {
+    const vFactor = Math.max(0, Math.min(1, 1 - velocity / 3.5));
+    for (const s of cardStates) {
+      if (mouseIn) {
+        const r = s.el.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const dist = Math.abs(mouseX - cx);
+        if (dist < CARD_MAX_DIST) {
+          const intensity = (1 - dist / CARD_MAX_DIST) * vFactor;
+          s.target = 1 + (CARD_MAX_SCALE - 1) * intensity;
+        } else {
+          s.target = 1;
+        }
+      } else {
+        s.target = 1;
+      }
+      // Lerp for that liquid Dock feel.
+      s.current += (s.target - s.current) * CARD_LERP;
+      s.el.style.transform = `scale(${s.current.toFixed(4)})`;
+      // A card that grew past ~1.05 wants to be on top of its siblings.
+      s.el.style.zIndex = s.current > 1.05 ? '3' : '1';
+    }
+    // Spotlight follows the same last-known cursor position with zero
+    // easing lag — the browser will just paint whatever is fresh here.
+    light.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
+    requestAnimationFrame(tickDock);
+  }
+  requestAnimationFrame(tickDock);
 
   // ------------------------- 3) scroll-hint behavior ------------------
   const hint = document.getElementById('scrollHint');
@@ -939,10 +973,30 @@
   }
 
   // ------------------------- 4) wheel → horizontal --------------------
+  // Touchpad scrolling arrives as many small deltaY values per second
+  // (~10–20 px each at 60–120 Hz) — writing scrollLeft directly is
+  // already smooth. Traditional mouse wheels emit ONE big deltaY (~100
+  // px on Windows) per notch, so a direct write jumps 100 px and looks
+  // jerky. Solution: accumulate the wheel delta into a `pending` target
+  // and lerp `body.scrollLeft` toward it in a RAF loop. Fast, small
+  // deltas (touchpad) resolve in a frame or two; big deltas (mouse
+  // wheel) glide in 4–6 frames — the classic "smooth scroll" feel.
   function pxDelta(e) {
     if (e.deltaMode === 1) return e.deltaY * 40;                    // line
     if (e.deltaMode === 2) return e.deltaY * window.innerHeight;    // page
     return e.deltaY;                                                // pixel
+  }
+  let scrollPending = 0;   // px still queued to consume
+  let scrollRAF = 0;
+  const SCROLL_LERP = 0.30;   // per-frame catch-up fraction
+  function tickScroll() {
+    scrollRAF = 0;
+    if (Math.abs(scrollPending) < 0.5) { scrollPending = 0; return; }
+    const step = scrollPending * SCROLL_LERP;
+    sc.scrollLeft += step;
+    scrollPending -= step;
+    if (Math.abs(scrollPending) > 0.5) scrollRAF = requestAnimationFrame(tickScroll);
+    updateHintForPosition();
   }
   window.addEventListener('wheel', (e) => {
     if (mq.matches) return;
@@ -951,8 +1005,13 @@
     const dy = pxDelta(e);
     if (dy === 0) return;
     e.preventDefault();
-    scrollByX(dy, false);
-    updateHintForPosition();
+    scrollPending += dy;
+    // Clamp so we never over-scroll and then bounce back.
+    const cur = sc.scrollLeft;
+    const max = getScrollMaxX();
+    if (cur + scrollPending < 0)   scrollPending = -cur;
+    if (cur + scrollPending > max) scrollPending = max - cur;
+    if (!scrollRAF) scrollRAF = requestAnimationFrame(tickScroll);
   }, { passive: false });
 
   // ------------------------- 5) keyboard nav --------------------------
