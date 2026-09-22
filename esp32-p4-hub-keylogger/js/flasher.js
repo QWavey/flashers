@@ -242,8 +242,9 @@ function hintForError(chip, msg) {
            `and hold BOOT while tapping RESET before you click Connect.`;
   }
   if (/NetworkError/i.test(s) || /device has been lost/i.test(s)) {
-    return `The USB port dropped mid-transfer (a CH334 hub glitch or a cable seat). ` +
-           `Unplug + replug the cable, put the ${chip.toUpperCase()} back into ROM mode, and retry.`;
+    return `The USB port dropped mid-transfer — a CH334 hub glitch. ` +
+           `Turn on "Hub-safe mode" in the options below (slower baud + no compression, ` +
+           `~90 s for the C6 storage image), reset the ${chip.toUpperCase()} into ROM mode, and retry.`;
   }
   return null;
 }
@@ -337,13 +338,29 @@ async function runFlash(chip) {
   let lastFileIndex = S.images.length - 1;
   try {
     setPhase(chip, 'writing');
-    const eraseChk = $('erase' + chip.toUpperCase());
-    const eraseAll = !!(eraseChk && eraseChk.checked);
+    const eraseChk  = $('erase' + chip.toUpperCase());
+    const rescueChk = $('rescue' + chip.toUpperCase());
+    const eraseAll  = !!(eraseChk  && eraseChk.checked);
+    const rescue    = !!(rescueChk && rescueChk.checked);
     if (eraseAll) log(`${chip}/flash: full-erase mode — wiping the whole chip first`, 'ok');
+    if (rescue) {
+      // Hub-safe mode: drop to the ROM baud (115200) and disable compression
+      // for the whole write. This matches what a bare esptool CLI does at
+      // "--baud 115200 --no-compress" — much slower but survives the CH334
+      // hub's spurious disconnects on large sequential writes (the C6
+      // storage.bin is the exemplar). We change baud AFTER stub upload so
+      // the sync still runs at 921600.
+      log(`${chip}/flash: hub-safe mode — dropping to 115200 baud, no compression`, 'ok');
+      const setter = S.esploader.changeBaud || S.esploader.setBaudrate;
+      if (setter) {
+        try { await setter.call(S.esploader, 115200); }
+        catch (e) { log(`${chip}/flash: could not lower baud (${e.message}); continuing anyway`, 'err'); }
+      }
+    }
     await S.esploader.writeFlash({
       fileArray: S.images.map(p => ({ data: p.data, address: p.address })),
       flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep',
-      eraseAll, compress: true,
+      eraseAll, compress: !rescue,
       reportProgress: (fileIndex, written, fileTotal) => {
         const done = (before[fileIndex] || 0) + written;
         paintProgress(chip, done, total);

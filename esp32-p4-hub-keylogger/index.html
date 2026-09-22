@@ -212,12 +212,13 @@
 
           <div class="opt-box">
             <label class="chk"><input type="checkbox" id="eraseP4"> Erase before flash <span>&mdash; full chip erase; wipes NVS &amp; the MSC partition</span></label>
+            <label class="chk"><input type="checkbox" id="rescueP4"> Hub-safe mode <span>&mdash; slower baud + no compression; try this if the flash keeps failing mid-write</span></label>
             <label class="chk"><span>Flash custom branch</span>
               <select id="branchP4" class="branch-sel" disabled aria-describedby="branchP4Note">
                 <option value="main" selected>main (current build)</option>
               </select>
             </label>
-            <p class="chk-note" id="branchP4Note">Switching branches is disabled for now &mdash; the page only ships the newest working build. When alternate branches produce a clean build, they will show up here.</p>
+            <p class="chk-note" id="branchP4Note">Switching branches is disabled for now &mdash; the page only ships the newest working build. Hub-safe mode helps when the CH334 hub drops the port mid-write (usually shows up as &ldquo;the device has been lost&rdquo;).</p>
           </div>
 
           <div class="acts">
@@ -287,12 +288,13 @@
 
           <div class="opt-box">
             <label class="chk"><input type="checkbox" id="eraseC6"> Erase before flash <span>&mdash; full chip erase; wipes NVS &amp; storage</span></label>
+            <label class="chk"><input type="checkbox" id="rescueC6" checked> Hub-safe mode <span>&mdash; slower baud + no compression; recommended for the CH334 hub</span></label>
             <label class="chk"><span>Flash custom branch</span>
               <select id="branchC6" class="branch-sel" disabled aria-describedby="branchC6Note">
                 <option value="main" selected>main (current build)</option>
               </select>
             </label>
-            <p class="chk-note" id="branchC6Note">Switching branches is disabled for now &mdash; the page only ships the newest working build.</p>
+            <p class="chk-note" id="branchC6Note">Switching branches is disabled for now &mdash; the page only ships the newest working build. Hub-safe mode makes writes slower (~90 s for 2&nbsp;MB) but survives the CH334 hub&rsquo;s spurious disconnects during storage.bin.</p>
           </div>
 
           <div class="acts">
@@ -368,6 +370,6 @@
 
 </div>
 
-<script type="module" src="./js/flasher.js?v=3"></script>
+<script type="module" src="./js/flasher.js?v=4"></script>
 </body>
 </html>
