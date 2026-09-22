@@ -12,6 +12,92 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./css/style.css">
+<style>
+  /* ---- horizontal-scroll layout ---------------------------------------
+     The page is a filmstrip: mast on the far left, cards in a row after
+     it, foot on the far right. Vertical scroll is disabled; mouse-wheel
+     `deltaY` is translated to `scrollLeft` by the script at the bottom
+     of <body>, and native two-finger touchpad horizontal (or Shift+wheel)
+     passes through unchanged. On phones the native left/right swipe
+     handles it. Mobile UAs that respect touch-action still work fine
+     since the layout is just wide, not weirdly-transformed. */
+  html, body {
+    overflow-x: auto; overflow-y: hidden;
+    height: 100vh; height: 100svh;
+    scroll-behavior: smooth;
+    scrollbar-width: thin; scrollbar-color: var(--gray-2) transparent;
+  }
+  body {
+    flex-direction: row; align-items: center;
+    padding: 0; gap: 0;
+    /* Body itself IS the horizontal scroll container. The wrap inside
+       laid out horizontally and grows as wide as its content needs. */
+  }
+  .wrap {
+    max-width: none; width: auto;
+    display: flex; flex-direction: row; align-items: center;
+    gap: var(--s-8, 64px); padding: var(--s-6, 32px) var(--s-7, 48px);
+    min-height: 100vh;
+  }
+  .mast {
+    flex-shrink: 0; text-align: left;
+    width: min(560px, 78vw); margin: 0;
+  }
+  .mast h1 { font-size: clamp(56px, 8vw, 110px); }
+  .mast .eyebrow, .mast p { margin-left: 0; margin-right: 0; }
+  .grid {
+    display: flex; flex-direction: row; gap: var(--s-5, 24px);
+    grid-template-columns: none;
+    flex-shrink: 0;
+  }
+  .card {
+    width: min(460px, 82vw); flex-shrink: 0;
+    height: min(640px, 82vh);
+    grid-template-rows: 1fr auto;
+  }
+  .card .art { flex: 1; min-height: 0; overflow: hidden; }
+  .foot {
+    flex-shrink: 0; width: auto; max-width: 320px;
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 0; border: none; margin: 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px; letter-spacing: 0.06em;
+  }
+  .foot a { display: block; color: var(--gray-2); text-decoration: none; padding: 4px 0; border-bottom: 1px solid transparent; }
+  .foot a:hover { color: var(--white); border-color: var(--line-2); }
+
+  /* A tiny hint arrow on the right edge so the horizontal-scroll
+     affordance is discoverable (dismisses on first scroll). */
+  .scroll-hint {
+    position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
+    z-index: 10; color: var(--gray-2); font-family: "IBM Plex Mono", monospace;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+    pointer-events: none; opacity: 0.7;
+    animation: hintPulse 2.4s ease-in-out infinite;
+  }
+  .scroll-hint.dismissed { opacity: 0; transition: opacity .4s ease; }
+  .scroll-hint .arrow { font-size: 18px; }
+  @keyframes hintPulse {
+    0%, 100% { transform: translateY(-50%) translateX(0); }
+    50%      { transform: translateY(-50%) translateX(6px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html, body { scroll-behavior: auto; }
+    .scroll-hint { animation: none; }
+  }
+
+  /* Restore vertical-flow layout on very narrow screens (mobile portrait)
+     where a horizontal filmstrip fights the small viewport. */
+  @media (max-width: 640px) {
+    html, body { overflow-x: hidden; overflow-y: auto; height: auto; }
+    body { flex-direction: column; padding: var(--s-6) var(--s-5); }
+    .wrap { flex-direction: column; padding: 0; gap: var(--s-6); min-height: 0; }
+    .grid { flex-direction: column; }
+    .card { width: 100%; height: auto; }
+    .scroll-hint { display: none; }
+  }
+</style>
 </head>
 <body>
 
@@ -546,5 +632,68 @@
 
 </div>
 
+<div class="scroll-hint" id="scrollHint"><span>scroll</span><span class="arrow">&rarr;</span></div>
+
+<script>
+// Turn vertical wheel motion into horizontal scroll on the whole page.
+// The page IS the horizontal scroll container (body has overflow-x:auto,
+// overflow-y:hidden). Two-finger touchpad horizontal (which reports as
+// deltaX) and Shift+wheel already scroll horizontally natively, so we
+// only remap the pure-vertical wheel case.
+(function () {
+  // Skip the remap on narrow viewports where we fall back to vertical flow.
+  const mq = window.matchMedia('(max-width: 640px)');
+
+  // Wheel delta comes in three modes: pixel (0), line (1), page (2).
+  // Line ~= 40px, page ~= viewport width; normalise everything to pixels.
+  function pxDelta(e) {
+    if (e.deltaMode === 1) return e.deltaY * 40;
+    if (e.deltaMode === 2) return e.deltaY * window.innerHeight;
+    return e.deltaY;
+  }
+
+  const scroller = document.scrollingElement || document.documentElement;
+  const hint = document.getElementById('scrollHint');
+  let hintDismissed = false;
+
+  window.addEventListener('wheel', (e) => {
+    if (mq.matches) return;
+    // Native horizontal already? Let it through.
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    if (e.shiftKey) return;
+    // Only remap the vertical component.
+    const dy = pxDelta(e);
+    if (dy === 0) return;
+    e.preventDefault();
+    scroller.scrollLeft += dy;
+    if (!hintDismissed && hint) {
+      hintDismissed = true; hint.classList.add('dismissed');
+      setTimeout(() => hint.remove(), 500);
+    }
+  }, { passive: false });
+
+  // Dismiss the hint on ANY scroll (touchpad horizontal, keyboard, etc.)
+  window.addEventListener('scroll', () => {
+    if (!hintDismissed && hint && scroller.scrollLeft > 20) {
+      hintDismissed = true; hint.classList.add('dismissed');
+      setTimeout(() => hint.remove(), 500);
+    }
+  }, { passive: true });
+
+  // Keyboard arrow keys: PageDown/Space nudge right, PageUp/Shift+Space left.
+  window.addEventListener('keydown', (e) => {
+    if (mq.matches) return;
+    if (e.target && ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+    const step = window.innerWidth * 0.8;
+    let dx = 0;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') dx = step;
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') dx = -step;
+    else if (e.key === 'Home') { e.preventDefault(); scroller.scrollTo({ left: 0 }); return; }
+    else if (e.key === 'End')  { e.preventDefault(); scroller.scrollTo({ left: scroller.scrollWidth }); return; }
+    else if (e.key === ' ')    dx = e.shiftKey ? -step : step;
+    if (dx) { e.preventDefault(); scroller.scrollBy({ left: dx, behavior: 'smooth' }); }
+  });
+})();
+</script>
 </body>
 </html>
