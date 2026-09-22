@@ -156,6 +156,16 @@
       0 0 60px -12px rgba(255, 255, 255, 0.15);
     z-index: 2;
   }
+  /* During active scroll, drop the expensive hover paint (large blur
+     shadow, filter, extra glow) — the browser was still painting the
+     hovered card's shadow every scroll frame even with the doc-coord
+     rect cache. `body.scrolling` is toggled by JS while the scroll RAF
+     is live; the moment scroll settles the full hover polish returns. */
+  body.scrolling .card:hover {
+    filter: none;
+    box-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.6);
+    background: #101015;
+  }
 
   /* Global cursor-following spotlight. NO CSS transition on transform —
      the previous version had `transition: transform 200ms` which was
@@ -863,48 +873,91 @@
   recomputeScrollMax();
   window.addEventListener('resize', recomputeScrollMax);
 
-  let scrollTargetX = 0;
-  let scrollRunning = false;
-  // 0.42 gets to within 0.5 px of the target in ~7 frames (~120 ms at
-  // 60 Hz) instead of the ~14 frames a 0.22 lerp needed. Still fluid
-  // enough to hide sub-pixel jitter, way less "why is it still going"
-  // felt-lag after the user stops turning the wheel.
-  const SCROLL_LERP = 0.42;
+  // Scroll model:
+  //   - Wheel input adds to a velocity (impulse).
+  //   - Frame update: position += velocity; velocity *= friction.
+  //     Result is real momentum — flick the wheel, page keeps sliding
+  //     and settles smoothly. Multiple quick notches stack, giving a
+  //     long glide, exactly like a Mac trackpad's inertia.
+  //   - Programmatic scrolls (click hints, keyboard nav) use the same
+  //     tickScroll loop but drive it via a target rather than velocity,
+  //     so we only have one animation path.
+  let scrollTargetX     = 0;      // target for programmatic scrolls
+  let scrollVelocityX   = 0;      // px/frame velocity (for wheel inertia)
+  let scrollRunning     = false;
+  let scrollMode        = 'idle'; // 'inertia' | 'target' | 'idle'
+  const SCROLL_FRICTION = 0.90;   // 0.9 → ~2/3 velocity gone every 4 frames
+  const TARGET_LERP     = 0.42;   // for programmatic (click hint) scrolls
+  const VEL_STOP        = 0.4;    // stop below this px/frame
 
   let lastWrittenScroll = -1;
   function tickScroll() {
-    const cur  = sc.scrollLeft;     // read ONCE per frame
-    const diff = scrollTargetX - cur;
-    if (Math.abs(diff) < 0.5) {
-      const finalX = Math.round(scrollTargetX);
-      if (finalX !== lastWrittenScroll) {
-        sc.scrollLeft = finalX; lastWrittenScroll = finalX;
-      }
-      scrollRunning = false;
-      updateHintForPosition();
-      return;
+    const cur = sc.scrollLeft;
+    let next  = cur;
+
+    if (scrollMode === 'inertia') {
+      next = cur + scrollVelocityX;
+      // Wall bounce: clip at edges and kill the velocity that would
+      // have carried past them, so hitting the edge feels solid
+      // rather than "the scroll suddenly stops" a few frames after.
+      if (next < 0) { next = 0; scrollVelocityX = 0; }
+      else if (next > scrollMaxCache) { next = scrollMaxCache; scrollVelocityX = 0; }
+      scrollVelocityX *= SCROLL_FRICTION;
+      if (Math.abs(scrollVelocityX) < VEL_STOP) scrollVelocityX = 0;
+    } else if (scrollMode === 'target') {
+      const diff = scrollTargetX - cur;
+      if (Math.abs(diff) < 0.5) next = scrollTargetX;
+      else next = cur + diff * TARGET_LERP;
     }
-    const next = Math.round(cur + diff * SCROLL_LERP);
-    if (next !== lastWrittenScroll) {
-      sc.scrollLeft = next; lastWrittenScroll = next;
+
+    const rounded = Math.round(next);
+    if (rounded !== lastWrittenScroll) {
+      sc.scrollLeft = rounded; lastWrittenScroll = rounded;
     }
     updateHintForPosition();
+
+    // Termination.
+    const done = (scrollMode === 'inertia' && scrollVelocityX === 0) ||
+                 (scrollMode === 'target'  && Math.abs(scrollTargetX - rounded) < 0.5);
+    if (done) {
+      scrollMode    = 'idle';
+      scrollRunning = false;
+      document.body.classList.remove('scrolling');
+      return;
+    }
     requestAnimationFrame(tickScroll);
   }
   function startScrollIfIdle() {
     if (!scrollRunning) {
       scrollRunning = true;
+      document.body.classList.add('scrolling');
       requestAnimationFrame(tickScroll);
     }
   }
+
+  // Wheel drives velocity (inertia). Each notch adds an impulse.
+  function pushInertia(dx) {
+    scrollMode = 'inertia';
+    // Cap total velocity so a super-fast flurry doesn't overshoot too
+    // wildly. ~65 px/frame = 3900 px/sec at 60 Hz, plenty punchy.
+    scrollVelocityX = Math.max(-65, Math.min(65, scrollVelocityX + dx));
+    startScrollIfIdle();
+  }
+
+  // Programmatic scrolls (arrow-hint click, keyboard nav) go through
+  // the target lerp, not inertia — the destination is known ahead.
   function scrollByX(dx, smooth) {
-    if (!scrollRunning) scrollTargetX = getScrollX();
-    scrollTargetX = Math.max(0, Math.min(getScrollMaxX(), scrollTargetX + dx));
+    if (scrollMode !== 'target') scrollTargetX = sc.scrollLeft;
+    scrollTargetX = Math.max(0, Math.min(scrollMaxCache, scrollTargetX + dx));
+    scrollVelocityX = 0;
+    scrollMode = 'target';
     if (smooth) startScrollIfIdle();
     else sc.scrollLeft = scrollTargetX;
   }
   function scrollToX(x, smooth) {
-    scrollTargetX = Math.max(0, Math.min(getScrollMaxX(), x));
+    scrollTargetX   = Math.max(0, Math.min(scrollMaxCache, x));
+    scrollVelocityX = 0;
+    scrollMode      = 'target';
     if (smooth) startScrollIfIdle();
     else sc.scrollLeft = scrollTargetX;
   }
@@ -1108,9 +1161,19 @@
     else dy = e.deltaY;                                              // pixel
     return dy * WHEEL_MULTIPLIER;
   }
-  // Prime the target on first paint so the first wheel event resumes
-  // from wherever the browser thinks the scroll is.
-  scrollTargetX = getScrollX();
+  scrollTargetX = sc.scrollLeft;
+
+  // Wheel input = velocity impulse. Instead of "here's a new target
+  // position", each notch says "add this much velocity to what's
+  // already there". Multiple quick notches stack, giving the long
+  // glide the user asked for.
+  //
+  // Scale factor: one Windows notch fires deltaY = 100 px. We turned
+  // that into 160 px in pxDelta. At 60 Hz with friction 0.9 a single
+  // impulse of 160/8 = 20 px/frame decays like:
+  //   20 → 18 → 16.2 → 14.6 → 13.1 → 11.8 → ... total ≈ 200 px slide
+  // Five quick notches → ~1000 px slide, enough to cross the whole row.
+  const WHEEL_IMPULSE_SCALE = 0.125;
 
   window.addEventListener('wheel', (e) => {
     if (mq.matches) return;
@@ -1119,18 +1182,14 @@
     const dy = pxDelta(e);
     if (dy === 0) return;
     e.preventDefault();
-    // If the RAF loop finished, rebase the target on the browser's
-    // true scrollLeft so wheel resumes from where the page actually is.
-    if (!scrollRunning) scrollTargetX = getScrollX();
-    scrollTargetX = Math.max(0, Math.min(getScrollMaxX(), scrollTargetX + dy));
-    startScrollIfIdle();
+    pushInertia(dy * WHEEL_IMPULSE_SCALE);
   }, { passive: false });
 
-  // Non-wheel scroll (touchscreen drag mostly — keyboard and click-hint
-  // go through the same lerp above) updates targetX so the next wheel
-  // event doesn't yank the page to a stale target. Body only — window's
-  // scroll event just bubbles from body's, no point wiring both.
-  function resyncTarget() { if (!scrollRunning) scrollTargetX = getScrollX(); }
+  // Non-wheel scroll (touchscreen drag) — reset our target tracking so
+  // the next wheel event resumes from the true position.
+  function resyncTarget() {
+    if (!scrollRunning) { scrollTargetX = sc.scrollLeft; scrollVelocityX = 0; }
+  }
   document.body.addEventListener('scroll', resyncTarget, { passive: true });
 
   // ------------------------- 5) keyboard nav --------------------------
