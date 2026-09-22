@@ -371,3 +371,11 @@ body[data-state="error"] .view .readout .ph { color: var(--err); }
   .device .dot, .device .anchordot, .device .label { opacity: 1 !important; }
 }
 
+/* Kill Android/Chromium's translucent blue tap-highlight rectangle
+   that flashes over every clickable element when touched. Keyboard
+   :focus-visible outlines above still apply, so accessibility is
+   preserved. */
+html { -webkit-tap-highlight-color: transparent; }
+a, button, label, select, input, .btn, .railbtn, .tabbtn, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}

@@ -989,3 +989,12 @@ body[data-state="ok"] .fx-port > * { animation: fxseat 0.5s var(--e-apple); }
   body[data-step="1"] .device { transform:none; }
   .fx-data, .fx-pk, .fx-press, .fx-port { display:none; }
 }
+
+/* Kill Android/Chromium's translucent blue tap-highlight rectangle
+   that flashes over every clickable element when touched. Keyboard
+   :focus-visible outlines above still apply, so accessibility is
+   preserved. */
+html { -webkit-tap-highlight-color: transparent; }
+a, button, label, select, input, .btn, .railbtn, .tabbtn, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
