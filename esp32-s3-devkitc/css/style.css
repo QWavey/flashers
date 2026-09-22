@@ -379,3 +379,163 @@ html { -webkit-tap-highlight-color: transparent; }
 a, button, label, select, input, .btn, .railbtn, .tabbtn, [role="button"] {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* =====================================================================
+   Mobile layout (portrait phones, <=720px).
+   Goal from the user: keep the DESKTOP visuals — traced figure,
+   two-column spec grid, dot-and-line rail, wizard views — and only
+   REARRANGE them for a narrow screen. Nothing here restyles the
+   components; it only changes the grid, sizes, and the view stack
+   so everything fits and the page can grow taller than the viewport.
+
+   Key differences vs desktop:
+   - Box no longer pinned to viewport height; page scrolls naturally.
+   - Body stacks slab above panel (single column).
+   - Slab stacks figure above spec (undoes the 860px "hide figure").
+   - Views drop absolute positioning: the ACTIVE view is a static
+     block that determines the box height; inactive views are hidden.
+     Transitions still work (opacity/transform on the active one).
+   - Rail keeps dots + connecting line + labels; side-scrolls when
+     labels don't fit.
+   - Header, spec, rail, wizard, footer all get a proportional font
+     and padding pass so nothing overflows the phone edge.
+   ===================================================================== */
+@media (max-width: 720px) {
+  html, body { overflow-x: hidden; }
+
+  .stage {
+    height: auto; min-height: 100svh;
+    padding: 12px;
+    justify-content: flex-start;
+  }
+  .box {
+    max-height: none;
+    max-width: 100%;
+  }
+
+  /* Body: slab (row 1) + panel (row 2). */
+  .box-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    min-height: 0;
+  }
+
+  /* Slab: figure on top, spec below. Override the 860px 2-col rule
+     that hides .fig and lays fig+spec side by side. */
+  .slab {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    align-items: stretch;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-1);
+    padding-bottom: 0;
+  }
+  .fig {
+    display: flex;
+    max-height: 200px;
+    padding: 14px 16px 6px;
+  }
+  .device { max-height: 180px; }
+  .spec {
+    grid-template-columns: 1fr 1fr;
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line-1);
+  }
+  .spec > div { padding: 8px 12px; min-width: 0; gap: 8px; }
+  .spec dt { font-size: 11.5px; }
+  .spec dd {
+    font-size: 12.5px;
+    min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* Panel: rail + views, tightened. The rail already grid-flows in
+     columns from the desktop rule; make each column narrower and let
+     the whole strip side-scroll if labels don't fit at this width. */
+  .rail {
+    padding: 14px 14px 10px;
+    grid-auto-columns: minmax(66px, 1fr);
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: 100%;
+  }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail li b { font-size: 11.5px; letter-spacing: 0.06em; }
+  .railbtn { padding: 3px 6px 5px 0; margin: 0 0 -5px; gap: 6px; }
+
+  /* Views: swap the absolute-positioned overlay stack for a plain
+     block. Only the active view renders, and it grows the panel
+     naturally so the whole page scrolls (no nested scrollers). */
+  .views {
+    position: static;
+    min-height: 0;
+    overflow: visible;
+  }
+  .view {
+    position: static;
+    inset: auto;
+    padding: 20px 16px 24px;
+  }
+  .view:not(.is-on) {
+    display: none;
+  }
+  .view.is-on {
+    opacity: 1; visibility: visible;
+    transform: none;
+    transition: none;
+  }
+  .view h1 { font-size: clamp(24px, 6vw, 32px); }
+  .view p  { font-size: 14.5px; line-height: 1.5; max-width: none; }
+  .view .acts { flex-wrap: wrap; gap: 8px; padding-top: 20px; }
+  .btn      { font-size: 14px; padding: 10px 16px; }
+  .btn.hold { min-height: 46px; padding: 12px 18px; }
+
+  /* Header: brandline shrinks, version chip drops. */
+  .box-top   { padding: 12px 14px; gap: 10px; }
+  .brandline { font-size: 14px; letter-spacing: 0.02em; }
+  .brandline .ver { display: none; }
+  .backlink  { padding: 4px 8px; font-size: 12px; }
+  .status    { font-size: 12px; }
+
+  .box-bot   { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+  .footstat  { font-size: 11px; }
+  .tabbtn    { padding: 6px 10px; font-size: 12px; }
+
+  /* Drawer pins to the viewport bottom so it can be full width. */
+  .drawer {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    max-height: 70svh; z-index: 40;
+  }
+}
+
+/* Narrower phones and the very tight tail (OnePlus 15 ~= 384px). */
+@media (max-width: 420px) {
+  .stage      { padding: 8px; }
+  .box-top    { padding: 10px 12px; }
+  .fig        { padding: 12px 12px 4px; max-height: 170px; }
+  .device     { max-height: 150px; }
+  .rail       { padding: 12px 12px 8px; grid-auto-columns: minmax(58px, 1fr); }
+  .rail li b  { font-size: 10.5px; letter-spacing: 0.03em; }
+  .view       { padding: 16px 14px 20px; }
+  .view h1    { font-size: 22px; }
+  .view p     { font-size: 14px; }
+  .box-bot    { padding: 8px 12px; }
+  .spec > div { padding: 6px 10px; }
+  .spec dt    { font-size: 11px; }
+  .spec dd    { font-size: 12px; }
+}
+
+/* Box overflow hardening: keep every part of the layout strictly
+   inside the phone viewport. The mobile @media above already sets
+   `.box { max-width: 100% }`, but with the desktop `width: 100%` still
+   in force the .stage padding gets combined with the .box border and
+   the spec cells push a few pixels past the right edge. Reset the
+   sizing explicitly so nothing can leak. */
+@media (max-width: 720px) {
+  .stage { padding: 10px; box-sizing: border-box; }
+  .box   { width: 100%; max-width: 100%; box-sizing: border-box; }
+  .box, .box-body, .slab, .panel, .rail, .views, .view,
+  .spec, .spec > div, .box-top, .box-bot { min-width: 0; }
+  .spec dd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .spec > div { padding: 8px 10px; }
+}
