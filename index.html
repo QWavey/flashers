@@ -108,6 +108,19 @@
     height: min(620px, 80vh);
     grid-template-rows: 1fr auto;
     z-index: 1;
+    /* `contain: layout style paint` isolates the card from the rest of
+       the page: transform/style changes inside a card can no longer
+       force siblings or ancestors to re-layout. Big win because the JS
+       Dock loop writes transform on cards every frame — without
+       containment each write forces the grid to re-flow. */
+    contain: layout style paint;
+    /* Off-screen cards during horizontal scroll: skip rendering. The
+       browser only paints cards near or in the viewport; scrolling
+       becomes cheap because there's nothing to paint for the cards
+       that are still off to the right. Needs an intrinsic size hint
+       so the layout is stable BEFORE the browser renders them. */
+    content-visibility: auto;
+    contain-intrinsic-size: min(440px, 80vw) min(620px, 80vh);
     /* Cancel the .card { animation: cardIn } rule from the shared
        css/style.css. That animation's final keyframe has
        `transform: none` with fill-mode:both, which was overriding the
@@ -154,19 +167,27 @@
     position: fixed; pointer-events: none;
     left: 0; top: 0; width: 520px; height: 520px; margin: -260px;
     border-radius: 50%;
+    /* Plain rgba white radial — no mix-blend-mode. blend-modes on a
+       fixed-position overlay force a full re-composite of everything
+       under it on every scroll frame, which was blocking the scroll
+       compositor. A slightly whiter gradient without blend gives the
+       same "light source" feel and composites at zero cost. */
     background: radial-gradient(
       circle at center,
-      rgba(255, 255, 255, 0.20),
-      rgba(255, 255, 255, 0.06) 30%,
+      rgba(255, 255, 255, 0.09),
+      rgba(255, 255, 255, 0.03) 32%,
       rgba(255, 255, 255, 0) 65%
     );
     z-index: 3;
     opacity: 0;
-    mix-blend-mode: soft-light;
     transform: translate3d(-9999px, -9999px, 0);
     /* Only opacity transitions (fade in/out); position is live. */
     transition: opacity 240ms ease;
     will-change: transform, opacity;
+    /* Force its own compositor layer so it doesn't re-paint with the
+       card behind it. */
+    isolation: isolate;
+    backface-visibility: hidden;
   }
   .cursor-light.on { opacity: 1; }
   /* (Removed the per-card ::after sheen and the cardFloat keyframes.
@@ -828,28 +849,45 @@
   // documentElement.scrollLeft as a defensive fallback; it's a no-op on
   // html-hidden setups.
   const sc = document.body;
-  function getScrollX()    { return sc.scrollLeft || document.documentElement.scrollLeft || 0; }
-  function getScrollMaxX() { return Math.max(sc.scrollWidth - sc.clientWidth, 0); }
-  // Target-tracked smooth scroll state. Declared here (top of the IIFE)
-  // so scrollByX / scrollToX below can rely on it, and so does the
-  // wheel handler defined further down.
+  // body owns the scroll (html has overflow: hidden), so we NEVER need
+  // to write documentElement.scrollLeft — that write is a no-op but
+  // still triggers style resolution on every frame, wasting layout.
+  function getScrollX() { return sc.scrollLeft || 0; }
+  // Cache the max scroll width — it only changes when the viewport or
+  // grid content size changes. Refreshed on resize.
+  let scrollMaxCache = 0;
+  function recomputeScrollMax() {
+    scrollMaxCache = Math.max(sc.scrollWidth - sc.clientWidth, 0);
+  }
+  function getScrollMaxX() { return scrollMaxCache; }
+  recomputeScrollMax();
+  window.addEventListener('resize', recomputeScrollMax);
+
   let scrollTargetX = 0;
   let scrollRunning = false;
-  const SCROLL_LERP = 0.22;
+  // 0.42 gets to within 0.5 px of the target in ~7 frames (~120 ms at
+  // 60 Hz) instead of the ~14 frames a 0.22 lerp needed. Still fluid
+  // enough to hide sub-pixel jitter, way less "why is it still going"
+  // felt-lag after the user stops turning the wheel.
+  const SCROLL_LERP = 0.42;
 
+  let lastWrittenScroll = -1;
   function tickScroll() {
-    const cur  = getScrollX();
+    const cur  = sc.scrollLeft;     // read ONCE per frame
     const diff = scrollTargetX - cur;
     if (Math.abs(diff) < 0.5) {
-      sc.scrollLeft = scrollTargetX;
-      document.documentElement.scrollLeft = scrollTargetX;
+      const finalX = Math.round(scrollTargetX);
+      if (finalX !== lastWrittenScroll) {
+        sc.scrollLeft = finalX; lastWrittenScroll = finalX;
+      }
       scrollRunning = false;
       updateHintForPosition();
       return;
     }
-    const next = cur + diff * SCROLL_LERP;
-    sc.scrollLeft = next;
-    document.documentElement.scrollLeft = next;
+    const next = Math.round(cur + diff * SCROLL_LERP);
+    if (next !== lastWrittenScroll) {
+      sc.scrollLeft = next; lastWrittenScroll = next;
+    }
     updateHintForPosition();
     requestAnimationFrame(tickScroll);
   }
@@ -863,18 +901,12 @@
     if (!scrollRunning) scrollTargetX = getScrollX();
     scrollTargetX = Math.max(0, Math.min(getScrollMaxX(), scrollTargetX + dx));
     if (smooth) startScrollIfIdle();
-    else {
-      sc.scrollLeft = scrollTargetX;
-      document.documentElement.scrollLeft = scrollTargetX;
-    }
+    else sc.scrollLeft = scrollTargetX;
   }
   function scrollToX(x, smooth) {
     scrollTargetX = Math.max(0, Math.min(getScrollMaxX(), x));
     if (smooth) startScrollIfIdle();
-    else {
-      sc.scrollLeft = scrollTargetX;
-      document.documentElement.scrollLeft = scrollTargetX;
-    }
+    else sc.scrollLeft = scrollTargetX;
   }
 
   // ------------------------- 1) repo chips ----------------------------
@@ -929,56 +961,61 @@
   light.setAttribute('aria-hidden', 'true');
   document.body.appendChild(light);
 
+  let dockRunning = false;
+  function startDockIfIdle() {
+    if (!dockRunning) { dockRunning = true; requestAnimationFrame(tickDock); }
+  }
   function pointerMoved(e) {
     if (e.pointerType && e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
     if (mq.matches) return;
-    const now = performance.now(), dt = now - lastMT;
-    if (dt > 0) {
-      const dx = e.clientX - lastMX, dy = e.clientY - lastMY;
-      // px/ms, smoothed with a heavy EMA so a single jittery event
-      // doesn't kill the effect but a real swipe does.
-      velocity = velocity * 0.8 + (Math.hypot(dx, dy) / dt) * 0.2;
-    }
-    lastMX = e.clientX; lastMY = e.clientY; lastMT = now;
     mouseX = e.clientX; mouseY = e.clientY; mouseIn = true;
     if (!light.classList.contains('on')) light.classList.add('on');
+    startDockIfIdle();
   }
   document.addEventListener('pointermove', pointerMoved, { passive: true });
   document.addEventListener('pointerleave', () => {
-    mouseIn = false; velocity = 0;
+    mouseIn = false;
     light.classList.remove('on');
+    startDockIfIdle();   // one more tick to relax everything back to 1
   });
-  window.addEventListener('blur',  () => { mouseIn = false; light.classList.remove('on'); });
+  window.addEventListener('blur',  () => { mouseIn = false; light.classList.remove('on'); startDockIfIdle(); });
 
   function tickDock() {
+    // Read the cursor position ONCE per frame into locals — no repeated
+    // property reads in the hot loop below.
+    const mx = mouseX, my = mouseY, in_ = mouseIn;
+    let anyAnimating = false;
     for (const s of cardStates) {
-      if (mouseIn) {
-        // Straight hit-test against the card's rect: is the cursor
-        // inside these bounds? If yes, lock target to max; otherwise
-        // target 1. No sliding falloff.
+      if (in_) {
         const r = s.el.getBoundingClientRect();
-        const inside =
-          mouseX >= r.left && mouseX <= r.right &&
-          mouseY >= r.top  && mouseY <= r.bottom;
-        s.target = inside ? CARD_MAX_SCALE : 1;
+        s.target = (mx >= r.left && mx <= r.right && my >= r.top && my <= r.bottom)
+          ? CARD_MAX_SCALE : 1;
       } else {
         s.target = 1;
       }
-      // Lerp so the grow/shrink is liquid rather than snapping.
-      s.current += (s.target - s.current) * CARD_LERP;
-      // setProperty with priority "important" bumps the inline style
-      // to important-inline, which beats CSS animations from the
-      // shared css/style.css in the cascade.
-      s.el.style.setProperty('transform', `scale(${s.current.toFixed(4)})`, 'important');
-      // The card being hovered wants to be on top of its siblings.
-      s.el.style.zIndex = s.current > 1.02 ? '3' : '1';
+      const diff = s.target - s.current;
+      // Skip DOM writes on cards that have already converged AND aren't
+      // moving toward a new target. Half the frames only touch one card.
+      if (Math.abs(diff) > 0.0005) {
+        s.current += diff * CARD_LERP;
+        s.el.style.setProperty('transform', `scale(${s.current.toFixed(4)})`, 'important');
+        s.el.style.zIndex = s.current > 1.02 ? '3' : '1';
+        anyAnimating = true;
+      } else if (s.current !== s.target) {
+        // Snap to the final value to stop the loop cleanly.
+        s.current = s.target;
+        s.el.style.setProperty('transform', `scale(${s.target.toFixed(4)})`, 'important');
+        s.el.style.zIndex = s.target > 1.02 ? '3' : '1';
+      }
     }
-    // Spotlight follows the last-known cursor position with zero easing
-    // lag — the browser paints whatever is fresh here every frame.
-    light.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
-    requestAnimationFrame(tickDock);
+    // Spotlight tracks the pointer only while it's visible (mouseIn).
+    if (in_) light.style.transform = `translate3d(${mx}px, ${my}px, 0)`;
+    // Self-stop when everything is at rest AND cursor isn't over the
+    // page. On next pointermove startDockIfIdle re-arms us.
+    if (anyAnimating || in_) requestAnimationFrame(tickDock);
+    else dockRunning = false;
   }
-  requestAnimationFrame(tickDock);
+  // Don't start until a pointer arrives.
 
   // ------------------------- 3) scroll-hint behavior ------------------
   // Two mirror hints:
@@ -992,18 +1029,18 @@
   const hintL = document.getElementById('scrollHintLeft');
   const END_TOL = 24;   // px tolerance to count as "at the edge"
 
+  // Cache the last hint state so we don't touch classList on every
+  // scroll frame — only when the atRight boundary is actually crossed.
+  let lastHintState = 'init';   // 'right' | 'left' | 'none' | 'init'
   function updateHintForPosition() {
-    const x   = getScrollX();
-    const max = getScrollMaxX();
-    if (max <= 0) {
-      // Nothing to scroll — hide both.
-      hintR && hintR.classList.remove('on');
-      hintL && hintL.classList.remove('on');
-      return;
-    }
-    const atRight = x >= max - END_TOL;
-    if (hintR) hintR.classList.toggle('on', !atRight);
-    if (hintL) hintL.classList.toggle('on',  atRight);
+    const max = scrollMaxCache;
+    let state;
+    if (max <= 0) state = 'none';
+    else state = (sc.scrollLeft >= max - END_TOL) ? 'left' : 'right';
+    if (state === lastHintState) return;
+    lastHintState = state;
+    if (hintR) hintR.classList.toggle('on', state === 'right');
+    if (hintL) hintL.classList.toggle('on', state === 'left');
   }
   if (hintR) hintR.addEventListener('click', (e) => {
     e.preventDefault();
@@ -1029,10 +1066,17 @@
   // that meant fast events sampled a lagging value and the sum came
   // out SMALLER than the sum of the deltas. That's the "faster =
   // slower" bug the user reported.
+  // Multiplier: 1.6x makes each wheel notch cover more ground. A single
+  // Windows mouse notch (deltaY=100) moves 160 px, so a five-notch flick
+  // takes you across most of the row. Touchpad deltas are small (5-20 px)
+  // so 1.6x is still buttery — same fraction of a card.
+  const WHEEL_MULTIPLIER = 1.6;
   function pxDelta(e) {
-    if (e.deltaMode === 1) return e.deltaY * 40;                    // line
-    if (e.deltaMode === 2) return e.deltaY * window.innerHeight;    // page
-    return e.deltaY;                                                // pixel
+    let dy;
+    if (e.deltaMode === 1) dy = e.deltaY * 40;                    // line
+    else if (e.deltaMode === 2) dy = e.deltaY * window.innerHeight;  // page
+    else dy = e.deltaY;                                              // pixel
+    return dy * WHEEL_MULTIPLIER;
   }
   // Prime the target on first paint so the first wheel event resumes
   // from wherever the browser thinks the scroll is.
@@ -1052,12 +1096,12 @@
     startScrollIfIdle();
   }, { passive: false });
 
-  // Non-wheel scroll (keyboard, click-hint, touchscreen drag) updates
-  // targetX so the next wheel event doesn't yank the page to a stale
-  // target.
+  // Non-wheel scroll (touchscreen drag mostly — keyboard and click-hint
+  // go through the same lerp above) updates targetX so the next wheel
+  // event doesn't yank the page to a stale target. Body only — window's
+  // scroll event just bubbles from body's, no point wiring both.
   function resyncTarget() { if (!scrollRunning) scrollTargetX = getScrollX(); }
   document.body.addEventListener('scroll', resyncTarget, { passive: true });
-  window.addEventListener('scroll', resyncTarget, { passive: true });
 
   // ------------------------- 5) keyboard nav --------------------------
   window.addEventListener('keydown', (e) => {
