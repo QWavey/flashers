@@ -12,6 +12,35 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./css/style.css">
+
+<style>
+  /* Flash-custom-branch dropdown (added by /bug-hunt round). */
+  .view .opt-box {
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px dashed var(--line-2, #34343B);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    display: grid; gap: 8px;
+  }
+  .view .opt-box .chk {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; color: var(--white);
+  }
+  .view .opt-box .chk > span:first-child { min-width: 150px; }
+  .view .chk-note {
+    margin: 0; font-size: 12px; color: var(--gray-2);
+    font-family: var(--font-mono, monospace); line-height: 1.4;
+  }
+  .view .branch-sel {
+    flex: 1; padding: 6px 10px;
+    background: #0b0b0e; color: var(--white);
+    border: 1px solid var(--line-2); border-radius: 6px;
+    font-family: var(--font-mono, monospace); font-size: 13px;
+    cursor: pointer;
+  }
+  .view .branch-sel:disabled { cursor: not-allowed; opacity: 0.55; color: var(--gray-1); }
+</style>
 </head>
 <body>
 
@@ -279,6 +308,16 @@
 
           <p class="inline-err" id="flashErr" hidden></p>
 
+          
+          <div class="opt-box">
+            <label class="chk"><span>Flash custom branch</span>
+              <select class="branch-sel" disabled aria-describedby="branchNote">
+                <option value="main" selected>main (current build)</option>
+              </select>
+            </label>
+            <p class="chk-note" id="branchNote">Switching branches is disabled for now &mdash; the page only ships the newest working build. When alternate branches produce a clean build, they will show up here.</p>
+          </div>
+
           <div class="acts">
             <button class="btn solid hold" id="btnFlash" disabled>
               <span class="hold-fill" aria-hidden="true"></span>
@@ -347,6 +386,6 @@
 
 </div>
 
-<script src="./js/flasher.js"></script>
+<script src="./js/flasher.js?v=3"></script>
 </body>
 </html>
