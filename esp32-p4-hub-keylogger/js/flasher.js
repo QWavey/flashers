@@ -241,10 +241,11 @@ function hintForError(chip, msg) {
     return `No response from the ${chip.toUpperCase()} on that port. Check the U4 switch position, ` +
            `and hold BOOT while tapping RESET before you click Connect.`;
   }
-  if (/NetworkError/i.test(s) || /device has been lost/i.test(s)) {
-    return `The USB port dropped mid-transfer — a CH334 hub glitch. ` +
-           `Turn on "Hub-safe mode" in the options below (slower baud + no compression, ` +
-           `~90 s for the C6 storage image), reset the ${chip.toUpperCase()} into ROM mode, and retry.`;
+  if (/NetworkError/i.test(s) || /device has been lost/i.test(s) ||
+      /Invalid head of packet/i.test(s) || /serial noise/i.test(s)) {
+    return `The USB link glitched mid-transfer — a CH334 hub hiccup. ` +
+           `Turn on "Hub-safe mode" in the options below (per-region erase, no full-chip wipe), ` +
+           `reset the ${chip.toUpperCase()} into ROM mode, and retry.`;
   }
   return null;
 }
@@ -261,9 +262,15 @@ async function connectChip(chip) {
     const port = await navigator.serial.requestPort({});
     S.port = port;
     S.transport = new Transport(port, true);
+    // 460800, not 921600. This board sits behind a CH334 USB hub (the M-EXT
+    // baseboard), and 921600 is too fast for it — the C6 storage write died
+    // with "Invalid head of packet (0x45)" mid-flash. 460800 is the exact
+    // baud a bare esptool CLI flashes this hardware at with zero errors, so
+    // we connect AND flash at it and never change baud mid-flash (the live
+    // changeBaud() reopen is itself fragile over WebSerial + the hub).
     S.esploader = new ESPLoader({
       transport: S.transport,
-      baudrate: 921600, romBaudrate: 115200,
+      baudrate: 460800, romBaudrate: 115200,
       terminal: espTerminal, debugLogging: false,
     });
     setStatus(`${chip.toUpperCase()}: connecting`, 'live');
@@ -341,47 +348,28 @@ async function runFlash(chip) {
     setPhase(chip, 'writing');
     const eraseChk  = $('erase' + chip.toUpperCase());
     const rescueChk = $('rescue' + chip.toUpperCase());
-    const eraseAll  = !!(eraseChk  && eraseChk.checked);
     const rescue    = !!(rescueChk && rescueChk.checked);
-    if (eraseAll) log(`${chip}/flash: full-erase mode — wiping the whole chip first`, 'ok');
+    // Hub-safe mode forces a PER-REGION erase (skips the full-chip erase).
+    // The full chip erase is one ~7 s ESP_ERASE_FLASH command, and its reply
+    // gets shredded by the CH334 hub ("Invalid head of packet (0x45)"), which
+    // was exactly the C6 failure. Per-region erase (writeFlash erases only the
+    // sectors it writes) is incremental and survives — it's what the working
+    // local esptool flash does, and it's sufficient for a firmware update.
+    const eraseAll  = !!(eraseChk && eraseChk.checked) && !rescue;
     if (rescue) {
-      // Hub-safe mode: drop to the ROM baud (115200) and disable compression
-      // for the whole write. This matches what a bare esptool CLI does at
-      // "--baud 115200 --no-compress" — much slower but survives the CH334
-      // hub's spurious disconnects on large sequential writes (the C6
-      // storage.bin is the exemplar). We change baud AFTER stub upload so
-      // the sync still runs at 921600.
-      log(`${chip}/flash: hub-safe mode — dropping to 115200 baud, no compression`, 'ok');
-      // esptool.js changeBaud() takes NO argument — it changes the live link
-      // to whatever this.baudrate holds (921600 after stub upload). The old
-      // code passed 115200 as an arg, which was silently ignored, so the
-      // whole erase+write still ran at 921600 and kept dying on the hub.
-      // Lower the field FIRST, then change, so we truly drop to 115200.
-      try {
-        S.esploader.baudrate = 115200;
-        if (typeof S.esploader.changeBaud === 'function') {
-          await S.esploader.changeBaud();
-        }
-      } catch (e) {
-        log(`${chip}/flash: baud-change glitched (${e.message}); reconnecting fresh at 115200`, 'err');
-        // The change command itself was eaten by a hub disconnect. Rebuild
-        // the link from a clean ROM sync at 115200 so erase/write start from
-        // a known-good low-speed connection instead of a desynced one.
-        try { if (S.transport) await S.transport.disconnect(); } catch (_) {}
-        S.transport = new Transport(S.port, true);
-        S.esploader = new ESPLoader({
-          transport: S.transport,
-          baudrate: 115200, romBaudrate: 115200,
-          terminal: espTerminal, debugLogging: false,
-        });
-        await S.esploader.main();
-        log(`${chip}/flash: reconnected at 115200`, 'ok');
-      }
+      log(`${chip}/flash: hub-safe mode — steady 460800 baud, per-region erase (gentler on CH334 hubs)`, 'ok');
+    } else if (eraseAll) {
+      log(`${chip}/flash: full-erase mode — wiping the whole chip first`, 'ok');
     }
+    // NO mid-flash changeBaud(): the whole session runs at the 460800 set in
+    // connectChip(). Re-opening the WebSerial port at a new baud mid-flash is
+    // itself fragile over the hub (it produced "Failed to open serial port").
+    // Compression stays ON — fewer bytes over the wire is MORE reliable on a
+    // flaky hub, and the local flash used it without issue.
     await S.esploader.writeFlash({
       fileArray: S.images.map(p => ({ data: p.data, address: p.address })),
       flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep',
-      eraseAll, compress: !rescue,
+      eraseAll, compress: true,
       reportProgress: (fileIndex, written, fileTotal) => {
         const done = (before[fileIndex] || 0) + written;
         paintProgress(chip, done, total);
