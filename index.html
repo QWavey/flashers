@@ -848,16 +848,15 @@
     card.appendChild(chip);
   });
 
-  // ------------------------- 2) Dock fisheye + spotlight --------------
-  // Ported from ESP-S3-Key-BadUSB/Website [ESP SD]/script.js
-  // (initMacosDock). Each card's scale is a function of pointer distance
-  // to its centre — the closest card scales up the most, adjacent cards
-  // scale up less, all others stay at 1. A velocity dampener knocks the
-  // effect back when the pointer is moving fast, so a swipe across the
-  // row doesn't leave a trail of half-scaled cards. Smoothed with a
-  // per-card lerp toward the target scale each RAF frame.
-  const CARD_MAX_SCALE = 1.14;     // biggest card scale at zero distance
-  const CARD_MAX_DIST  = 260;      // px from card centre before scale = 1
+  // ------------------------- 2) Hover-fisheye + spotlight --------------
+  // Simpler than the classic Dock: when the pointer is INSIDE a card's
+  // rect the card locks to max scale, and when the pointer leaves the
+  // card the card lerps back to 1. No sliding-scale-with-distance —
+  // that's what the user meant by "big, bigger, smaller" — the size
+  // was changing as they moved the pointer inside the card. Now the
+  // scale is binary per card (max while inside, 1 while outside), and
+  // the per-frame lerp still makes the growth feel liquid.
+  const CARD_MAX_SCALE = 1.10;     // scale while pointer is inside
   const CARD_LERP      = 0.22;     // per-frame catch-up factor
   const cardStates = Array.from(document.querySelectorAll('.card')).map(el => ({
     el, current: 1, target: 1, rect: null,
@@ -895,34 +894,30 @@
   window.addEventListener('blur',  () => { mouseIn = false; light.classList.remove('on'); });
 
   function tickDock() {
-    const vFactor = Math.max(0, Math.min(1, 1 - velocity / 3.5));
     for (const s of cardStates) {
       if (mouseIn) {
+        // Straight hit-test against the card's rect: is the cursor
+        // inside these bounds? If yes, lock target to max; otherwise
+        // target 1. No sliding falloff.
         const r = s.el.getBoundingClientRect();
-        const cx = r.left + r.width / 2;
-        const dist = Math.abs(mouseX - cx);
-        if (dist < CARD_MAX_DIST) {
-          const intensity = (1 - dist / CARD_MAX_DIST) * vFactor;
-          s.target = 1 + (CARD_MAX_SCALE - 1) * intensity;
-        } else {
-          s.target = 1;
-        }
+        const inside =
+          mouseX >= r.left && mouseX <= r.right &&
+          mouseY >= r.top  && mouseY <= r.bottom;
+        s.target = inside ? CARD_MAX_SCALE : 1;
       } else {
         s.target = 1;
       }
-      // Lerp for that liquid Dock feel.
+      // Lerp so the grow/shrink is liquid rather than snapping.
       s.current += (s.target - s.current) * CARD_LERP;
       // setProperty with priority "important" bumps the inline style
-      // to important-inline, which beats CSS animations and the shared
-      // css/style.css in the cascade. Belt + suspenders after the
-      // `animation: cardFloat both` override that hid the whole effect
-      // in v1.
+      // to important-inline, which beats CSS animations from the
+      // shared css/style.css in the cascade.
       s.el.style.setProperty('transform', `scale(${s.current.toFixed(4)})`, 'important');
-      // A card that grew past ~1.05 wants to be on top of its siblings.
-      s.el.style.zIndex = s.current > 1.05 ? '3' : '1';
+      // The card being hovered wants to be on top of its siblings.
+      s.el.style.zIndex = s.current > 1.02 ? '3' : '1';
     }
-    // Spotlight follows the same last-known cursor position with zero
-    // easing lag — the browser will just paint whatever is fresh here.
+    // Spotlight follows the last-known cursor position with zero easing
+    // lag — the browser paints whatever is fresh here every frame.
     light.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
     requestAnimationFrame(tickDock);
   }
