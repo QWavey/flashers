@@ -1,6 +1,6 @@
 {
   "name": "ESP32-P4 KeyLogger \u2014 C6 firmware",
-  "version": "usbctl-1",
+  "version": "fatlist-1",
   "chip": "ESP32-C6",
   "flashSize": "keep",
   "parts": [
@@ -17,7 +17,7 @@
     {
       "path": "app.bin",
       "offset": 65536,
-      "size": 1030688
+      "size": 1031936
     },
     {
       "path": "storage.bin",
